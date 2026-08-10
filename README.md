@@ -1,0 +1,56 @@
+# Screennote
+
+An Android browser with a built-in PDF viewer, intended as the capture surface for a
+screenshot-plus-note tool. This first milestone is the browser and viewer themselves, plus a
+self-update path so the app can be kept current on a device without a store.
+
+- **minSdk 27 (Android 8.1)**, targetSdk 34, Kotlin.
+- PDFs are rendered with the platform's `android.graphics.pdf.PdfRenderer` (API 21+), so no
+  JavaScript PDF engine is bundled and nothing depends on the device's WebView version.
+- Passwords are delegated to the **system autofill service**. Screennote has no password store of
+  its own and never reads password fields.
+
+## What works
+
+| Area | Behaviour |
+| --- | --- |
+| Browsing | URL/search bar, back navigation, pull-to-refresh, pinch zoom, page progress |
+| PDF | Links ending in `.pdf`, `application/pdf` downloads, and `ACTION_VIEW` intents from other apps open in the built-in viewer |
+| PDF viewer | Continuous vertical scroll, lazy page rendering with an LRU cache, page indicator |
+| Autofill | `importantForAutofill=YES` on the WebView, plus `AutofillManager.commit()` on navigation so the "save password?" prompt fires |
+| Updates | On launch (silently) and from the menu, checks GitHub Releases and offers to download and install a newer APK |
+
+Not yet implemented: the note-taking and capture features themselves, PDF text selection/search,
+and pinch zoom inside the PDF viewer.
+
+## Building
+
+```sh
+./gradlew assembleDebug        # app/build/outputs/apk/debug/
+./gradlew test                 # JVM unit tests
+```
+
+The version is injected at build time; local builds get `0.0.0-dev`, which is deliberately older
+than any release so the update path can be exercised.
+
+## Updating on the device
+
+`UpdateChecker` polls `https://api.github.com/repos/<owner>/<repo>/releases/latest` (the repository
+is baked in as `BuildConfig.GITHUB_REPO`), compares the tag against `BuildConfig.VERSION_NAME`, and
+offers the first `.apk` asset it finds.
+
+Two things have to be true for this to work:
+
+1. **Every release is signed with the same key.** Android refuses an upgrade signed by a different
+   key. See [docs/RELEASING.md](docs/RELEASING.md).
+2. **The user has allowed Screennote to install apps.** On Android 8+ this is a per-app grant; the
+   app checks `canRequestPackageInstalls()` and sends the user to the right Settings screen.
+
+## Notes on choices
+
+- `usesCleartextTraffic` is **true**. It has to be, for a browser — plenty of sites are still
+  plain HTTP. Mixed content inside an HTTPS page is still blocked
+  (`MIXED_CONTENT_NEVER_ALLOW`), and Safe Browsing is on.
+- The repository is public, so **releases are public downloads**. That is fine for the APK; it is
+  the reason no keystore and no captured data live in this repository.
+- `androidx.pdf` was not used: it requires API 31+.

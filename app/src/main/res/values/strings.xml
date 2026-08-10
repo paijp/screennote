@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">Screennote</string>
+    <string name="pdf_viewer_title">PDF</string>
+    <string name="url_hint">Search or enter address</string>
+    <string name="action_go">Go</string>
+    <string name="action_reload">Reload</string>
+    <string name="action_check_update">Check for updates</string>
+    <string name="page_indicator">%1$d / %2$d</string>
+    <string name="pdf_loading">Loading PDF…</string>
+    <string name="pdf_error">Could not open this PDF: %1$s</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_available_message">Screennote %1$s is available (you have %2$s).\n\nDownload and install now?</string>
+    <string name="update_none">Screennote is up to date (%1$s).</string>
+    <string name="update_check_failed">Update check failed: %1$s</string>
+    <string name="update_downloading">Downloading update…</string>
+    <string name="update_download_failed">Update download failed: %1$s</string>
+    <string name="update_install">Install</string>
+    <string name="update_later">Later</string>
+    <string name="update_needs_permission">Screennote needs permission to install apps from this source. Enable it on the next screen, then try again.</string>
+    <string name="cancel">Cancel</string>
+</resources>

@@ -1,0 +1,18 @@
+<resources>
+    <string name="url_hint">検索、または URL を入力</string>
+    <string name="action_go">移動</string>
+    <string name="action_reload">再読み込み</string>
+    <string name="action_check_update">アップデートを確認</string>
+    <string name="pdf_loading">PDF を読み込んでいます…</string>
+    <string name="pdf_error">この PDF を開けませんでした: %1$s</string>
+    <string name="update_available_title">アップデートがあります</string>
+    <string name="update_available_message">Screennote %1$s が利用できます（現在 %2$s）。\n\nダウンロードしてインストールしますか？</string>
+    <string name="update_none">Screennote は最新です（%1$s）。</string>
+    <string name="update_check_failed">アップデートの確認に失敗しました: %1$s</string>
+    <string name="update_downloading">アップデートをダウンロードしています…</string>
+    <string name="update_download_failed">アップデートのダウンロードに失敗しました: %1$s</string>
+    <string name="update_install">インストール</string>
+    <string name="update_later">あとで</string>
+    <string name="update_needs_permission">不明なアプリのインストールを許可してください。次の画面で有効にしてから、もう一度お試しください。</string>
+    <string name="cancel">キャンセル</string>
+</resources>

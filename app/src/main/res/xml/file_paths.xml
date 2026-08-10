@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Downloaded APKs handed to the package installer. -->
+    <cache-path name="updates" path="updates/" />
+    <!-- PDFs fetched for the built-in viewer. -->
+    <cache-path name="pdf" path="pdf/" />
+</paths>
