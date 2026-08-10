@@ -37,7 +37,7 @@ class PdfDocument private constructor(
                 val bitmap = Bitmap.createBitmap(targetWidth, height, Bitmap.Config.ARGB_8888)
                 // PdfRenderer composites onto the existing pixels; pages are drawn on white.
                 bitmap.eraseColor(Color.WHITE)
-                page.render(bitmap, null, null, PdfRenderer.RENDER_MODE_FOR_DISPLAY)
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                 bitmap
             }
         }
