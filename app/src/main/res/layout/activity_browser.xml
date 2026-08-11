@@ -9,6 +9,7 @@
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
+        android:background="@color/surface"
         app:contentInsetStartWithNavigation="0dp"
         app:contentInsetStart="8dp">
 
@@ -33,7 +34,8 @@
         android:layout_width="match_parent"
         android:layout_height="3dp"
         android:max="100"
-        android:visibility="gone" />
+        android:background="@color/surface"
+        android:visibility="invisible" />
 
     <FrameLayout
         android:layout_width="match_parent"

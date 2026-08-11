@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Screennote" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:statusBarColor">?attr/colorSurface</item>
-        <!-- The status bar is painted with colorSurface, so its icons must be dark here and
+        <item name="android:statusBarColor">@color/surface</item>
+        <item name="android:windowBackground">@color/surface</item>
+        <!-- The status bar is painted with @color/surface, so its icons must be dark here and
              light in values-night. Without this the icons stay white on a white bar. -->
         <item name="android:windowLightStatusBar">true</item>
     </style>

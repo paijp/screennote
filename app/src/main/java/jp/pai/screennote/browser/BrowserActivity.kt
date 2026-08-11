@@ -115,7 +115,7 @@ class BrowserActivity : AppCompatActivity() {
         binding.webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView, newProgress: Int) {
                 binding.progress.progress = newProgress
-                binding.progress.visibility = if (newProgress in 1..99) View.VISIBLE else View.GONE
+                binding.progress.visibility = if (newProgress in 1..99) View.VISIBLE else View.INVISIBLE
             }
 
             override fun onConsoleMessage(message: ConsoleMessage): Boolean {
@@ -197,7 +197,7 @@ class BrowserActivity : AppCompatActivity() {
     private fun showLoadError(summary: String, url: String) {
         binding.errorText.visibility = View.VISIBLE
         binding.errorText.text = getString(R.string.load_error, summary, url)
-        binding.progress.visibility = View.GONE
+        binding.progress.visibility = View.INVISIBLE
         binding.swipeRefresh.isRefreshing = false
     }
 
@@ -327,7 +327,7 @@ class BrowserActivity : AppCompatActivity() {
             DebugLog.log("nav", "finished $url")
             binding.urlBar.setText(url)
             binding.swipeRefresh.isRefreshing = false
-            binding.progress.visibility = View.GONE
+            binding.progress.visibility = View.INVISIBLE
         }
 
         override fun onReceivedError(

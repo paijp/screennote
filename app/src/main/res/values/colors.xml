@@ -2,4 +2,8 @@
 <resources>
     <color name="ic_launcher_background">#1F3A5F</color>
     <color name="pdf_page_backdrop">#2B2B2B</color>
+    <!-- Explicit rather than ?attr/colorSurface: windowBackground is resolved before the theme's
+         attributes are available, and an unresolved (transparent) window background is what shows
+         through as flicker while the WebView repaints. -->
+    <color name="surface">#FFFBFE</color>
 </resources>
