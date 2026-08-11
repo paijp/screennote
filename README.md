@@ -56,3 +56,8 @@ Two things have to be true for this to work:
 - The repository is public, so **releases are public downloads**. That is fine for the APK; it is
   the reason no keystore and no captured data live in this repository.
 - `androidx.pdf` was not used: it requires API 31+.
+- **Extra trust anchors.** Android 8.1's trust store predates roots that are in everyday use, so
+  some sites fail with `SSL_UNTRUSTED` in WebView while loading fine in Chrome — Chrome ships its
+  own root store, WebView uses the platform's. `res/xml/network_security_config.xml` keeps the
+  system anchors and adds specific publicly trusted roots that newer Android versions ship
+  themselves. Certificate errors are never bypassed: `onReceivedSslError` always cancels.

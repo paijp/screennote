@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 8.1 shipped a trust store that predates several roots in use today, so sites whose chain
+  ends at one of them fail with SSL_UNTRUSTED even though the same site loads in Chrome (Chrome
+  carries its own root store; WebView uses the platform's).
+
+  System anchors are kept and augmented, never replaced. Each bundled root is a publicly trusted CA
+  that current Android versions ship themselves — this restores parity with a modern device rather
+  than relaxing validation. Verify a root's SHA-256 fingerprint against the CA's published value
+  before adding it here, and record it below.
+
+  - globalsign_root_r46: GlobalSign Root R46, valid 2019-03-20 to 2046-03-20,
+    SHA-256 4F:A3:12:6D:8D:3A:11:D1:C4:85:5A:4F:80:7C:BA:D6:CF:91:9D:3A:5A:88:B0:3B:EA:2C:63:72:D9:3C:40:C9
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/globalsign_root_r46" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
