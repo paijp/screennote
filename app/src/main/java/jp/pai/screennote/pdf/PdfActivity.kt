@@ -12,6 +12,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import jp.pai.screennote.DebugLog
+import jp.pai.screennote.Palette
+import jp.pai.screennote.Prefs
 import jp.pai.screennote.R
 import jp.pai.screennote.databinding.ActivityPdfBinding
 import kotlinx.coroutines.Dispatchers
@@ -24,6 +26,7 @@ class PdfActivity : AppCompatActivity() {
     private lateinit var binding: ActivityPdfBinding
     private lateinit var scaleDetector: ScaleGestureDetector
 
+    private lateinit var palette: Palette
     private var document: PdfDocument? = null
     private var baseWidth = 0
     private var zoom = 1f
@@ -38,6 +41,9 @@ class PdfActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         binding.toolbar.setNavigationOnClickListener { finish() }
+
+        palette = Palette.of(Prefs(this).nightMode, resources.configuration)
+        palette.apply(this, binding.toolbar)
 
         val uri = intent.getStringExtra(EXTRA_URI)?.let(Uri::parse) ?: intent.data
         if (uri == null) {
@@ -65,6 +71,13 @@ class PdfActivity : AppCompatActivity() {
         scaleDetector.onTouchEvent(event)
         if (scaling || event.pointerCount > 1) return true
         return super.dispatchTouchEvent(event)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // See Palette: the configuration is not a reliable source once a WebView has been created
+        // in this process, so the chrome is repainted from the stored preference.
+        palette.apply(this, binding.toolbar)
     }
 
     private fun load(uri: Uri) {

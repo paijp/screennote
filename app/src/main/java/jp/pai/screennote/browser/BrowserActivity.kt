@@ -32,6 +32,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import jp.pai.screennote.BuildConfig
 import jp.pai.screennote.DebugLog
+import jp.pai.screennote.Palette
 import jp.pai.screennote.Prefs
 import jp.pai.screennote.R
 import jp.pai.screennote.databinding.ActivityBrowserBinding
@@ -46,6 +47,12 @@ class BrowserActivity : AppCompatActivity() {
     /** WebView's own user agent, kept so desktop mode can be turned back off. */
     private lateinit var mobileUserAgent: String
 
+    /**
+     * Resolved once, before the WebView exists. After that point the configuration is no longer
+     * trustworthy on this platform version, so it is never consulted again.
+     */
+    private lateinit var palette: Palette
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityBrowserBinding.inflate(layoutInflater)
@@ -54,12 +61,18 @@ class BrowserActivity : AppCompatActivity() {
         supportActionBar?.setDisplayShowTitleEnabled(false)
 
         prefs = Prefs(this)
+        palette = Palette.of(prefs.nightMode, resources.configuration)
+        applyPalette()
+
         configureWebView()
         configureUrlBar()
 
         DebugLog.log("app", "start ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         DebugLog.log("app", "ua=${binding.webView.settings.userAgentString}")
         logUiMode("create")
+        // Re-applied after the WebView is constructed: that is the point at which the resolved
+        // configuration can silently change underneath us.
+        applyPalette()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -97,9 +110,22 @@ class BrowserActivity : AppCompatActivity() {
         }
         DebugLog.log(
             "theme",
-            "$reason resolved=$resolved pref=${prefs.nightMode} " +
-                "delegate=${AppCompatDelegate.getDefaultNightMode()}",
+            "$reason resolved=$resolved painting=${if (::palette.isInitialized) palette.name else "?"} " +
+                "pref=${prefs.nightMode} delegate=${AppCompatDelegate.getDefaultNightMode()}",
         )
+    }
+
+    private fun applyPalette() {
+        palette.apply(this, binding.toolbar, binding.urlBar)
+        binding.root.setBackgroundColor(palette.surface)
+        binding.progress.setBackgroundColor(palette.surface)
+        binding.errorText.setBackgroundColor(palette.surface)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        logUiMode("resume")
+        applyPalette()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -287,6 +313,9 @@ class BrowserActivity : AppCompatActivity() {
                 prefs.nightMode = modes[which]
                 AppCompatDelegate.setDefaultNightMode(modes[which])
                 dialog.dismiss()
+                // The chrome paints from the stored preference, not from the configuration, so
+                // the activity has to be rebuilt for the new choice to take effect.
+                recreate()
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
