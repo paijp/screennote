@@ -57,9 +57,13 @@ jobs:
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "::error::KEYSTORE_BASE64 is not set. Releases must be signed with a stable key,"
             echo "::error::otherwise the in-app updater cannot install over the previous version."
-            echo "::error::See docs/RELEASING.md for how to create the key and the four secrets."
+            echo "::error::See docs/RELEASING.md for how to create the key and the secrets."
             exit 1
           fi
+          # A PKCS12 keystore cannot hold a per-key password, so for the keystore created by
+          # docs/RELEASING.md the key password is the store password. KEY_PASSWORD only needs
+          # to be set for a JKS keystore where the two genuinely differ.
+          : "${KEY_PASSWORD:=$KEYSTORE_PASSWORD}"
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
           cat > keystore.properties <<EOF
           storeFile=$RUNNER_TEMP/release.jks

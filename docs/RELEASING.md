@@ -20,8 +20,15 @@ Then register it as repository secrets:
 base64 -w0 screennote-release.jks | gh secret set KEYSTORE_BASE64 --repo paijp/screennote
 gh secret set KEYSTORE_PASSWORD --repo paijp/screennote   # the store password you just chose
 gh secret set KEY_ALIAS         --repo paijp/screennote   # screennote
-gh secret set KEY_PASSWORD      --repo paijp/screennote   # the key password
 ```
+
+`KEY_PASSWORD` is optional and defaults to `KEYSTORE_PASSWORD`. A PKCS12 keystore — what the
+command above creates, and what recent `keytool` produces by default — cannot hold a separate
+password per key, so the two are necessarily the same. Set `KEY_PASSWORD` only for a JKS keystore
+where they genuinely differ.
+
+Without `gh`, add the secrets at
+`https://github.com/paijp/screennote/settings/secrets/actions`.
 
 Store `screennote-release.jks` and its passwords offline. The release workflow fails loudly if
 `KEYSTORE_BASE64` is missing rather than falling back to a throwaway key, because a release signed
