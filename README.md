@@ -14,7 +14,7 @@ self-update path so the app can be kept current on a device without a store.
 
 | Area | Behaviour |
 | --- | --- |
-| Browsing | URL/search bar, back navigation, pull-to-refresh, pinch zoom, page progress |
+| Browsing | URL/search bar, back navigation, pull-to-refresh, pinch zoom, page progress, desktop-site toggle, light/dark theme |
 | PDF | Links ending in `.pdf`, `application/pdf` downloads, and `ACTION_VIEW` intents from other apps open in the built-in viewer |
 | PDF viewer | Continuous vertical scroll, lazy page rendering with an LRU cache, page indicator |
 | Autofill | `importantForAutofill=YES` on the WebView, plus `AutofillManager.commit()` on navigation so the "save password?" prompt fires |

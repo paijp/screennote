@@ -14,6 +14,11 @@
     <string name="update_install">インストール</string>
     <string name="update_later">あとで</string>
     <string name="update_needs_permission">不明なアプリのインストールを許可してください。次の画面で有効にしてから、もう一度お試しください。</string>
+    <string name="action_desktop_site">デスクトップ表示</string>
+    <string name="action_theme">テーマ</string>
+    <string name="theme_system">システムに従う</string>
+    <string name="theme_light">ライト</string>
+    <string name="theme_dark">ダーク</string>
     <string name="action_debug_log">デバッグログ</string>
     <string name="debug_log_copy">コピー</string>
     <string name="debug_log_clear">消去</string>

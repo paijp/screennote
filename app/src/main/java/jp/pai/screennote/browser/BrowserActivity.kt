@@ -28,8 +28,10 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import jp.pai.screennote.BuildConfig
 import jp.pai.screennote.DebugLog
+import jp.pai.screennote.Prefs
 import jp.pai.screennote.R
 import jp.pai.screennote.databinding.ActivityBrowserBinding
 import jp.pai.screennote.pdf.PdfActivity
@@ -38,6 +40,10 @@ import jp.pai.screennote.update.UpdateFlow
 class BrowserActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityBrowserBinding
+    private lateinit var prefs: Prefs
+
+    /** WebView's own user agent, kept so desktop mode can be turned back off. */
+    private lateinit var mobileUserAgent: String
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +52,7 @@ class BrowserActivity : AppCompatActivity() {
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayShowTitleEnabled(false)
 
+        prefs = Prefs(this)
         configureWebView()
         configureUrlBar()
 
@@ -97,6 +104,9 @@ class BrowserActivity : AppCompatActivity() {
             safeBrowsingEnabled = true
         }
 
+        mobileUserAgent = binding.webView.settings.userAgentString
+        applyViewMode(reload = false)
+
         // Credentials are delegated to the system autofill service (Google Password Manager,
         // Bitwarden, ...). Screennote never reads or stores passwords itself.
         binding.webView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
@@ -128,6 +138,18 @@ class BrowserActivity : AppCompatActivity() {
                 openExternally(url)
             }
         }
+    }
+
+    /**
+     * Desktop mode is a user agent swap: sites choose their layout from it. `useWideViewPort` and
+     * `loadWithOverviewMode` (set once, above) then scale the wider page down to fit the screen
+     * rather than letting it overflow.
+     */
+    private fun applyViewMode(reload: Boolean) {
+        val userAgent = if (prefs.desktopSite) UserAgents.desktop(mobileUserAgent) else mobileUserAgent
+        binding.webView.settings.userAgentString = userAgent
+        DebugLog.log("view", "desktop=${prefs.desktopSite}")
+        if (reload) binding.webView.reload()
     }
 
     private fun configureUrlBar() {
@@ -188,10 +210,25 @@ class BrowserActivity : AppCompatActivity() {
         return true
     }
 
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        menu.findItem(R.id.action_desktop_site)?.isChecked = prefs.desktopSite
+        return super.onPrepareOptionsMenu(menu)
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.action_reload -> {
             clearLoadError()
             binding.webView.reload()
+            true
+        }
+        R.id.action_desktop_site -> {
+            prefs.desktopSite = !prefs.desktopSite
+            item.isChecked = prefs.desktopSite
+            applyViewMode(reload = true)
+            true
+        }
+        R.id.action_theme -> {
+            showThemeChooser()
             true
         }
         R.id.action_debug_log -> {
@@ -203,6 +240,33 @@ class BrowserActivity : AppCompatActivity() {
             true
         }
         else -> super.onOptionsItemSelected(item)
+    }
+
+    /**
+     * Android 8.1 has no system-wide dark setting, so "follow system" resolves to light on this
+     * device and the choice has to be offered by the app itself.
+     */
+    private fun showThemeChooser() {
+        val modes = intArrayOf(
+            AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM,
+            AppCompatDelegate.MODE_NIGHT_NO,
+            AppCompatDelegate.MODE_NIGHT_YES,
+        )
+        val labels = arrayOf(
+            getString(R.string.theme_system),
+            getString(R.string.theme_light),
+            getString(R.string.theme_dark),
+        )
+        val current = modes.indexOf(prefs.nightMode).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.action_theme)
+            .setSingleChoiceItems(labels, current) { dialog, which ->
+                prefs.nightMode = modes[which]
+                AppCompatDelegate.setDefaultNightMode(modes[which])
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun showDebugLog() {

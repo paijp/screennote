@@ -17,6 +17,11 @@
     <string name="update_install">Install</string>
     <string name="update_later">Later</string>
     <string name="update_needs_permission">Screennote needs permission to install apps from this source. Enable it on the next screen, then try again.</string>
+    <string name="action_desktop_site">Desktop site</string>
+    <string name="action_theme">Theme</string>
+    <string name="theme_system">Follow system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
     <string name="action_debug_log">Debug log</string>
     <string name="debug_log_copy">Copy</string>
     <string name="debug_log_clear">Clear</string>

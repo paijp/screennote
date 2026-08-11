@@ -6,6 +6,15 @@
         android:title="@string/action_reload"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_desktop_site"
+        android:title="@string/action_desktop_site"
+        android:checkable="true"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_theme"
+        android:title="@string/action_theme"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_debug_log"
         android:title="@string/action_debug_log"
         app:showAsAction="never" />
