@@ -14,5 +14,10 @@
     <string name="update_install">インストール</string>
     <string name="update_later">あとで</string>
     <string name="update_needs_permission">不明なアプリのインストールを許可してください。次の画面で有効にしてから、もう一度お試しください。</string>
+    <string name="action_debug_log">デバッグログ</string>
+    <string name="debug_log_copy">コピー</string>
+    <string name="debug_log_clear">消去</string>
+    <string name="debug_log_copied">ログをクリップボードにコピーしました</string>
+    <string name="load_error">このページを読み込めませんでした。\n\n%1$s\n\n%2$s</string>
     <string name="cancel">キャンセル</string>
 </resources>

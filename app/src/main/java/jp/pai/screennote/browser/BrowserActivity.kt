@@ -2,9 +2,12 @@ package jp.pai.screennote.browser
 
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.net.http.SslError
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -12,13 +15,21 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.view.autofill.AutofillManager
+import android.webkit.ConsoleMessage
+import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import jp.pai.screennote.BuildConfig
+import jp.pai.screennote.DebugLog
 import jp.pai.screennote.R
 import jp.pai.screennote.databinding.ActivityBrowserBinding
 import jp.pai.screennote.pdf.PdfActivity
@@ -37,6 +48,9 @@ class BrowserActivity : AppCompatActivity() {
 
         configureWebView()
         configureUrlBar()
+
+        DebugLog.log("app", "start ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+        DebugLog.log("app", "ua=${binding.webView.settings.userAgentString}")
 
         binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }
 
@@ -93,8 +107,18 @@ class BrowserActivity : AppCompatActivity() {
                 binding.progress.progress = newProgress
                 binding.progress.visibility = if (newProgress in 1..99) View.VISIBLE else View.GONE
             }
+
+            override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                DebugLog.log(
+                    "console",
+                    "${message.messageLevel()} ${message.message()} " +
+                        "(${message.sourceId()}:${message.lineNumber()})",
+                )
+                return true
+            }
         }
-        binding.webView.setDownloadListener { url, _, contentDisposition, mimeType, _ ->
+        binding.webView.setDownloadListener { url, _, contentDisposition, mimeType, size ->
+            DebugLog.log("download", "url=$url mime=$mimeType size=$size")
             if (UrlUtils.isPdfMimeType(mimeType) ||
                 UrlUtils.looksLikePdf(url) ||
                 contentDisposition?.contains(".pdf", ignoreCase = true) == true
@@ -125,19 +149,38 @@ class BrowserActivity : AppCompatActivity() {
             openPdf(url)
             return
         }
+        DebugLog.log("nav", "load $url")
+        clearLoadError()
         binding.webView.loadUrl(url)
     }
 
     private fun openPdf(url: String) {
+        DebugLog.log("nav", "pdf $url")
         startActivity(PdfActivity.intent(this, Uri.parse(url)))
     }
 
     private fun openExternally(url: String) {
+        DebugLog.log("nav", "external $url")
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         } catch (_: ActivityNotFoundException) {
             // Nothing on the device can handle it; silently ignore rather than crash.
         }
+    }
+
+    /**
+     * Replaces the blank page a failed navigation would otherwise leave behind. Without this the
+     * only symptom of a TLS or network failure is that the page never appears.
+     */
+    private fun showLoadError(summary: String, url: String) {
+        binding.errorText.visibility = View.VISIBLE
+        binding.errorText.text = getString(R.string.load_error, summary, url)
+        binding.progress.visibility = View.GONE
+        binding.swipeRefresh.isRefreshing = false
+    }
+
+    private fun clearLoadError() {
+        binding.errorText.visibility = View.GONE
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -147,7 +190,12 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.action_reload -> {
+            clearLoadError()
             binding.webView.reload()
+            true
+        }
+        R.id.action_debug_log -> {
+            showDebugLog()
             true
         }
         R.id.action_check_update -> {
@@ -155,6 +203,21 @@ class BrowserActivity : AppCompatActivity() {
             true
         }
         else -> super.onOptionsItemSelected(item)
+    }
+
+    private fun showDebugLog() {
+        val text = DebugLog.snapshot()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.action_debug_log)
+            .setMessage(text)
+            .setPositiveButton(R.string.debug_log_copy) { _, _ ->
+                getSystemService(ClipboardManager::class.java)
+                    ?.setPrimaryClip(ClipData.newPlainText("screennote log", text))
+                Toast.makeText(this, R.string.debug_log_copied, Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton(R.string.debug_log_clear) { _, _ -> DebugLog.clear() }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -180,7 +243,10 @@ class BrowserActivity : AppCompatActivity() {
                     openExternally(url)
                     true
                 }
-                else -> false
+                else -> {
+                    DebugLog.log("nav", "navigate $url main=${request.isForMainFrame}")
+                    false
+                }
             }
         }
 
@@ -188,13 +254,68 @@ class BrowserActivity : AppCompatActivity() {
             // Leaving a page ends any form the user was filling in. Committing here is what
             // makes the system's "save password?" prompt appear for WebView content.
             runCatching { getSystemService(AutofillManager::class.java)?.commit() }
+            DebugLog.log("nav", "started $url")
+            clearLoadError()
             binding.urlBar.setText(url)
         }
 
         override fun onPageFinished(view: WebView, url: String) {
+            DebugLog.log("nav", "finished $url")
             binding.urlBar.setText(url)
             binding.swipeRefresh.isRefreshing = false
             binding.progress.visibility = View.GONE
+        }
+
+        override fun onReceivedError(
+            view: WebView,
+            request: WebResourceRequest,
+            error: WebResourceError,
+        ) {
+            DebugLog.log(
+                "error",
+                "net ${error.errorCode} ${error.description} " +
+                    "main=${request.isForMainFrame} ${request.url}",
+            )
+            if (request.isForMainFrame) {
+                showLoadError("${error.errorCode} ${error.description}", request.url.toString())
+            }
+        }
+
+        override fun onReceivedHttpError(
+            view: WebView,
+            request: WebResourceRequest,
+            errorResponse: WebResourceResponse,
+        ) {
+            DebugLog.log(
+                "error",
+                "http ${errorResponse.statusCode} ${errorResponse.reasonPhrase} " +
+                    "main=${request.isForMainFrame} ${request.url}",
+            )
+            if (request.isForMainFrame) {
+                showLoadError(
+                    "HTTP ${errorResponse.statusCode} ${errorResponse.reasonPhrase}",
+                    request.url.toString(),
+                )
+            }
+        }
+
+        override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
+            val reason = sslErrorName(error.primaryError)
+            DebugLog.log("error", "ssl $reason url=${error.url}")
+            DebugLog.log("error", "ssl cert=${error.certificate}")
+            // Never proceed past a certificate the platform rejected.
+            handler.cancel()
+            showLoadError("SSL: $reason", error.url)
+        }
+
+        private fun sslErrorName(code: Int): String = when (code) {
+            SslError.SSL_NOTYETVALID -> "certificate not yet valid"
+            SslError.SSL_EXPIRED -> "certificate expired"
+            SslError.SSL_IDMISMATCH -> "hostname mismatch"
+            SslError.SSL_UNTRUSTED -> "untrusted certificate authority"
+            SslError.SSL_DATE_INVALID -> "invalid certificate date"
+            SslError.SSL_INVALID -> "invalid certificate"
+            else -> "unknown ($code)"
         }
     }
 

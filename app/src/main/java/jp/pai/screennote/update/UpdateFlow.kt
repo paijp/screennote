@@ -6,6 +6,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import jp.pai.screennote.BuildConfig
+import jp.pai.screennote.DebugLog
 import jp.pai.screennote.R
 import kotlinx.coroutines.launch
 
@@ -21,8 +22,11 @@ object UpdateFlow {
     fun check(activity: AppCompatActivity, silent: Boolean) {
         activity.lifecycleScope.launch {
             val release = try {
-                UpdateChecker.fetchLatest()
+                UpdateChecker.fetchLatest().also {
+                    DebugLog.log("update", "latest=${it?.versionName} current=${BuildConfig.VERSION_NAME}")
+                }
             } catch (t: Throwable) {
+                DebugLog.log("update", "check failed: $t")
                 if (!silent) {
                     toast(activity, activity.getString(R.string.update_check_failed, t.message ?: ""))
                 }
@@ -71,6 +75,7 @@ object UpdateFlow {
                 progress.dismiss()
                 UpdateInstaller.install(activity, apk)
             } catch (t: Throwable) {
+                DebugLog.log("update", "download failed: $t")
                 progress.dismiss()
                 toast(activity, activity.getString(R.string.update_download_failed, t.message ?: ""))
             }
