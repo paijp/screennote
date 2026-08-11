@@ -2,8 +2,11 @@
 <resources>
     <color name="ic_launcher_background">#1F3A5F</color>
     <color name="pdf_page_backdrop">#2B2B2B</color>
-    <!-- Explicit rather than ?attr/colorSurface: windowBackground is resolved before the theme's
-         attributes are available, and an unresolved (transparent) window background is what shows
-         through as flicker while the WebView repaints. -->
+
+    <!-- The chrome around the page paints from these, never from theme attributes that a parent
+         theme or a view's own theme overlay could resolve differently. windowBackground in
+         particular is resolved before theme attributes are available. -->
     <color name="surface">#FFFBFE</color>
+    <color name="on_surface">#1C1B1F</color>
+    <color name="on_surface_variant">#49454F</color>
 </resources>

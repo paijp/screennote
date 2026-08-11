@@ -10,6 +10,8 @@
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="@color/surface"
+        android:theme="@style/ThemeOverlay.Screennote.Toolbar"
+        app:popupTheme="@style/ThemeOverlay.Screennote.Toolbar"
         app:contentInsetStartWithNavigation="0dp"
         app:contentInsetStart="8dp">
 
@@ -20,6 +22,8 @@
             android:layout_gravity="center_vertical"
             android:background="@null"
             android:hint="@string/url_hint"
+            android:textColor="@color/on_surface"
+            android:textColorHint="@color/on_surface_variant"
             android:imeOptions="actionGo"
             android:inputType="textUri"
             android:maxLines="1"

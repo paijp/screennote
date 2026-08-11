@@ -1,10 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Screennote" parent="Theme.Material3.DayNight.NoActionBar">
+    <!-- Light and dark are separate, explicit themes rather than one DayNight theme. Android 8.1
+         has no system dark setting, and letting DayNight resolve the palette left light and dark
+         values reachable from the same screen. -->
+    <style name="Theme.Screennote" parent="Theme.Material3.Light.NoActionBar">
         <item name="android:statusBarColor">@color/surface</item>
         <item name="android:windowBackground">@color/surface</item>
-        <!-- The status bar is painted with @color/surface, so its icons must be dark here and
-             light in values-night. Without this the icons stay white on a white bar. -->
+        <!-- Status bar icons must contrast with @color/surface: dark here, light in values-night. -->
         <item name="android:windowLightStatusBar">true</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+    </style>
+
+    <!--
+      Applied to the toolbar itself. A Toolbar themes its children, so without pinning these the
+      URL field could resolve its text colour from a different palette than the bar it sits on —
+      which is what produced white text on a black field surrounded by white chrome.
+
+      Defined once: the colours it references carry their own values-night variants.
+    -->
+    <style name="ThemeOverlay.Screennote.Toolbar" parent="">
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+        <item name="android:textColorPrimary">@color/on_surface</item>
+        <item name="android:textColorSecondary">@color/on_surface_variant</item>
+        <item name="android:textColorHint">@color/on_surface_variant</item>
     </style>
 </resources>

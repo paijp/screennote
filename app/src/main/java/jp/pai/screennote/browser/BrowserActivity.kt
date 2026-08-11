@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
@@ -58,6 +59,7 @@ class BrowserActivity : AppCompatActivity() {
 
         DebugLog.log("app", "start ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         DebugLog.log("app", "ua=${binding.webView.settings.userAgentString}")
+        logUiMode("create")
 
         binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }
 
@@ -81,6 +83,30 @@ class BrowserActivity : AppCompatActivity() {
 
         // Silent: only speaks up when a newer release actually exists.
         UpdateFlow.check(this, silent = true)
+    }
+
+    /**
+     * A theme that flips at runtime shows up as light and dark values on screen at once. Each
+     * activity creation and configuration change records which palette was in force, so a repeat
+     * of the flicker can be read off the log instead of guessed at.
+     */
+    private fun logUiMode(reason: String) {
+        val night = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        val resolved = when (night) {
+            Configuration.UI_MODE_NIGHT_YES -> "night"
+            Configuration.UI_MODE_NIGHT_NO -> "day"
+            else -> "undefined"
+        }
+        DebugLog.log(
+            "theme",
+            "$reason resolved=$resolved pref=${prefs.nightMode} " +
+                "delegate=${AppCompatDelegate.getDefaultNightMode()}",
+        )
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        logUiMode("configChanged")
     }
 
     override fun onNewIntent(intent: Intent) {
