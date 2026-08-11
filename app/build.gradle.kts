@@ -11,8 +11,11 @@ plugins {
 val appVersionName: String = (project.findProperty("versionName") as String?) ?: "0.0.0-dev"
 val appVersionCode: Int = ((project.findProperty("versionCode") as String?) ?: "1").toInt()
 
-// The repository the in-app updater polls for new releases.
+// Where the in-app updater looks: release/latest.json on the default branch of this repository,
+// served over raw.githubusercontent.com.
 val githubRepo: String = (project.findProperty("githubRepo") as String?) ?: "paijp/screennote"
+val releaseBranch: String = (project.findProperty("releaseBranch") as String?) ?: "main"
+val releaseDir: String = (project.findProperty("releaseDir") as String?) ?: "release"
 
 // Release signing. Supplied by CI through a keystore decoded from repository secrets.
 // Without it, `assembleRelease` falls back to the debug key (fine for local smoke tests,
@@ -34,6 +37,8 @@ android {
         versionName = appVersionName
 
         buildConfigField("String", "GITHUB_REPO", "\"$githubRepo\"")
+        buildConfigField("String", "RELEASE_BRANCH", "\"$releaseBranch\"")
+        buildConfigField("String", "RELEASE_DIR", "\"$releaseDir\"")
     }
 
     signingConfigs {

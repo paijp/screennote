@@ -11,6 +11,8 @@ import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.DigestOutputStream
+import java.security.MessageDigest
 
 object UpdateInstaller {
 
@@ -29,8 +31,17 @@ object UpdateInstaller {
             if (connection.responseCode !in 200..299) {
                 throw IOException("HTTP ${connection.responseCode}")
             }
+            val digest = MessageDigest.getInstance("SHA-256")
             connection.inputStream.use { input ->
-                target.outputStream().use { output -> input.copyTo(output, 64 * 1024) }
+                DigestOutputStream(target.outputStream(), digest).use { output ->
+                    input.copyTo(output, 64 * 1024)
+                }
+            }
+            // The signature check at install time is what actually protects the user; this
+            // catches a truncated or mid-flight-corrupted download before the installer sees it.
+            val actual = digest.digest().joinToString("") { "%02x".format(it) }
+            if (release.sha256 != null && release.sha256 != actual) {
+                throw IOException("checksum mismatch")
             }
         } catch (t: Throwable) {
             target.delete()

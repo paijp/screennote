@@ -80,7 +80,8 @@ jobs:
           ./gradlew assembleRelease --stacktrace \
             -PversionName=${{ steps.version.outputs.name }} \
             -PversionCode=${{ steps.version.outputs.code }} \
-            -PgithubRepo=${{ github.repository }}
+            -PgithubRepo=${{ github.repository }} \
+            -PreleaseBranch=${{ github.event.repository.default_branch }}
 
       - name: Stage APK
         id: apk
@@ -106,3 +107,32 @@ jobs:
               --title "$TAG" \
               --generate-notes
           fi
+
+      # The app updates itself from release/ on the default branch rather than from the
+      # Releases API: it needs no API token, is not rate limited per IP, and the manifest can
+      # carry a checksum. Releases above remain the per-version archive.
+      - name: Publish APK to release/ on the default branch
+        env:
+          BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          SHA=$(sha256sum "${{ steps.apk.outputs.path }}" | cut -d' ' -f1)
+          git fetch origin "$BRANCH"
+          git checkout -B "$BRANCH" "origin/$BRANCH"
+          mkdir -p release
+          cp "${{ steps.apk.outputs.path }}" release/screennote-release.apk
+          cat > release/latest.json <<EOF
+          {
+            "versionName": "${{ steps.version.outputs.name }}",
+            "versionCode": ${{ steps.version.outputs.code }},
+            "apk": "screennote-release.apk",
+            "sha256": "$SHA",
+            "publishedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release/
+          # Nothing to do when an identical APK was already published.
+          git diff --cached --quiet && exit 0
+          git commit -m "Publish ${{ steps.version.outputs.name }} to release/"
+          git push origin "$BRANCH"

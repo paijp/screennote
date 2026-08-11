@@ -47,20 +47,67 @@ git push origin v0.1.0
    (so `0.1.0` → `100`, `1.2.3` → `10203`) — this must increase on every release;
 2. runs the unit tests;
 3. builds and signs `screennote-<version>.apk`;
-4. creates the GitHub release and attaches the APK.
+4. creates the GitHub release and attaches the APK;
+5. commits the same APK to `release/` on the default branch, together with `release/latest.json`.
 
-`workflow_dispatch` accepts a version directly if you would rather not tag first.
+Each version component must stay below 100 (`1.99.99` is the ceiling before versionCode
+collisions).
 
-Each component must stay below 100 (`1.99.99` is the ceiling before versionCode collisions).
+### Without pushing a tag
+
+`workflow_dispatch` takes the version directly, which is the only route available from an
+environment whose git proxy refuses tag pushes:
+
+- Actions → **release** → **Run workflow** → version `0.1.1`, or
+- `gh workflow run release.yml --repo paijp/screennote -f version=0.1.1`
+
+`gh release create` creates the tag server-side either way, so the result is identical to tagging.
+
+## How the app finds updates
+
+The app does **not** use the Releases API. It reads
+`https://raw.githubusercontent.com/paijp/screennote/main/release/latest.json`, which the release
+workflow writes:
+
+```json
+{
+  "versionName": "0.1.1",
+  "versionCode": 101,
+  "apk": "screennote-release.apk",
+  "sha256": "…",
+  "publishedAt": "2026-08-11T05:42:06Z"
+}
+```
+
+`versionName` is compared against `BuildConfig.VERSION_NAME`; if it is newer, the APK is fetched
+from `…/main/release/screennote-release.apk`, its SHA-256 checked against the manifest, and handed
+to the package installer.
+
+Why `release/` rather than the Releases API: no token, no per-IP API rate limit, and the manifest
+can carry a checksum. GitHub Releases remain the per-version archive — `release/` only ever holds
+the newest build.
+
+The repository, branch and directory are baked in at build time
+(`BuildConfig.GITHUB_REPO`, `RELEASE_BRANCH`, `RELEASE_DIR`) and can be overridden with
+`-PgithubRepo=` / `-PreleaseBranch=` / `-PreleaseDir=`.
+
+Two consequences worth remembering:
+
+- **`raw.githubusercontent.com` is CDN-cached for a few minutes.** The app appends a timestamp
+  query to defeat a stale edge copy, but a check made seconds after a release can still miss it.
+- **The workflow pushes to the default branch.** That push is made with `GITHUB_TOKEN`, so it does
+  not itself trigger `build.yml`.
 
 ## Verifying the update path
 
 1. Install release *N* on the device.
-2. Tag and push release *N+1*.
-3. Open Screennote. The launch check should offer the update within a second or two; the menu's
+2. Release *N+1* (tag push, or `workflow_dispatch` as above).
+3. Confirm `release/latest.json` on the default branch shows *N+1*.
+4. Open Screennote. The launch check should offer the update within a second or two; the menu's
    **Check for updates** forces the same check and reports the result either way.
-4. The first install requires granting "install unknown apps" to Screennote — the app detects this
+5. The first install requires granting "install unknown apps" to Screennote — the app detects this
    and opens the Settings screen.
 
 If the install dialog reports a signature mismatch, releases *N* and *N+1* were signed with
-different keys.
+different keys. If the download fails with "checksum mismatch", `release/latest.json` and
+`release/screennote-release.apk` are out of step — re-run the release.

@@ -18,7 +18,7 @@ self-update path so the app can be kept current on a device without a store.
 | PDF | Links ending in `.pdf`, `application/pdf` downloads, and `ACTION_VIEW` intents from other apps open in the built-in viewer |
 | PDF viewer | Continuous vertical scroll, lazy page rendering with an LRU cache, page indicator |
 | Autofill | `importantForAutofill=YES` on the WebView, plus `AutofillManager.commit()` on navigation so the "save password?" prompt fires |
-| Updates | On launch (silently) and from the menu, checks GitHub Releases and offers to download and install a newer APK |
+| Updates | On launch (silently) and from the menu, reads `release/latest.json` on the default branch and offers to download and install a newer APK |
 
 Not yet implemented: the note-taking and capture features themselves, PDF text selection/search,
 and pinch zoom inside the PDF viewer.
@@ -35,9 +35,11 @@ than any release so the update path can be exercised.
 
 ## Updating on the device
 
-`UpdateChecker` polls `https://api.github.com/repos/<owner>/<repo>/releases/latest` (the repository
-is baked in as `BuildConfig.GITHUB_REPO`), compares the tag against `BuildConfig.VERSION_NAME`, and
-offers the first `.apk` asset it finds.
+`UpdateChecker` reads `release/latest.json` from the default branch over
+`raw.githubusercontent.com`, compares its `versionName` against `BuildConfig.VERSION_NAME`, and
+offers the APK sitting next to it — verifying the manifest's SHA-256 before handing it to the
+package installer. The release workflow writes both files. See
+[docs/RELEASING.md](docs/RELEASING.md) for why this is used instead of the Releases API.
 
 Two things have to be true for this to work:
 
