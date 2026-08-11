@@ -16,7 +16,7 @@ self-update path so the app can be kept current on a device without a store.
 | --- | --- |
 | Browsing | URL/search bar, back navigation, pinch zoom, page progress, desktop-site toggle, light/dark theme |
 | PDF | Links ending in `.pdf`, `application/pdf` downloads, and `ACTION_VIEW` intents from other apps open in the built-in viewer |
-| PDF viewer | Continuous vertical scroll, pinch zoom with horizontal panning, lazy page rendering with an LRU cache, page indicator |
+| PDF viewer | Continuous vertical scroll, pinch zoom with diagonal panning, lazy page rendering with an LRU cache, page indicator |
 | Autofill | `importantForAutofill=YES` on the WebView, plus `AutofillManager.commit()` on navigation so the "save password?" prompt fires |
 | Updates | On launch (silently) and from the menu, reads `release/latest.json` on the default branch and offers to download and install a newer APK |
 
@@ -25,7 +25,9 @@ selection/search.
 
 Pull-to-refresh was removed: `SwipeRefreshLayout` wrapping the WebView coincided with rendering
 artefacts while zoomed (white rectangles over page content, the toolbar flashing). Reload lives in
-the overflow menu.
+the overflow menu. Those artefacts come from WebView's own tile rasteriser and outlived the
+change, so the menu also offers **software rendering**, which bypasses the GPU raster path at the
+cost of scrolling smoothness.
 
 ## Building
 

@@ -156,6 +156,7 @@ class BrowserActivity : AppCompatActivity() {
 
         mobileUserAgent = binding.webView.settings.userAgentString
         applyViewMode(reload = false)
+        applyRenderingMode()
 
         // Credentials are delegated to the system autofill service (Google Password Manager,
         // Bitwarden, ...). Screennote never reads or stores passwords itself.
@@ -200,6 +201,17 @@ class BrowserActivity : AppCompatActivity() {
         binding.webView.settings.userAgentString = userAgent
         DebugLog.log("view", "desktop=${prefs.desktopSite}")
         if (reload) binding.webView.reload()
+    }
+
+    /**
+     * The white blocks that appear over page content while zoomed come from WebView's own tile
+     * rasteriser, which the app cannot reach. Drawing into a software layer sidesteps it entirely
+     * at the cost of scrolling smoothness, so it is offered as a choice rather than imposed.
+     */
+    private fun applyRenderingMode() {
+        val layer = if (prefs.softwareRendering) View.LAYER_TYPE_SOFTWARE else View.LAYER_TYPE_NONE
+        binding.webView.setLayerType(layer, null)
+        DebugLog.log("view", "software=${prefs.softwareRendering}")
     }
 
     private fun configureUrlBar() {
@@ -261,6 +273,7 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         menu.findItem(R.id.action_desktop_site)?.isChecked = prefs.desktopSite
+        menu.findItem(R.id.action_software_rendering)?.isChecked = prefs.softwareRendering
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -274,6 +287,13 @@ class BrowserActivity : AppCompatActivity() {
             prefs.desktopSite = !prefs.desktopSite
             item.isChecked = prefs.desktopSite
             applyViewMode(reload = true)
+            true
+        }
+        R.id.action_software_rendering -> {
+            prefs.softwareRendering = !prefs.softwareRendering
+            item.isChecked = prefs.softwareRendering
+            applyRenderingMode()
+            binding.webView.reload()
             true
         }
         R.id.action_theme -> {

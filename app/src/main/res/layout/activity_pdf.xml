@@ -17,14 +17,14 @@
         android:layout_weight="1"
         android:background="@color/pdf_page_backdrop">
 
-        <!-- The RecyclerView scrolls vertically at a width we set from the zoom level; this
-             scroller pans across it once that width exceeds the screen. -->
-        <HorizontalScrollView
-            android:id="@+id/pagesScroller"
+        <!-- The page column is laid out at the zoomed width and panned horizontally through its
+             own translationX, so one drag can move in both axes at once. A HorizontalScrollView
+             here would claim the gesture outright and make diagonal panning impossible. -->
+        <FrameLayout
+            android:id="@+id/pagesViewport"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:fillViewport="true"
-            android:scrollbars="none">
+            android:clipChildren="true">
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/pages"
@@ -33,7 +33,7 @@
                 android:clipToPadding="false"
                 android:paddingTop="8dp"
                 android:paddingBottom="8dp" />
-        </HorizontalScrollView>
+        </FrameLayout>
 
         <ProgressBar
             android:id="@+id/loading"

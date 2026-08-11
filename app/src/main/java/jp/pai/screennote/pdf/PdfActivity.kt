@@ -34,6 +34,10 @@ class PdfActivity : AppCompatActivity() {
     /** Set while a pinch is in progress, so the list does not scroll under the gesture. */
     private var scaling = false
 
+    /** Horizontal pan, in pixels, applied to the page column. Range [-(width - viewport), 0]. */
+    private var panX = 0f
+    private var lastTouchX = 0f
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityPdfBinding.inflate(layoutInflater)
@@ -70,7 +74,27 @@ class PdfActivity : AppCompatActivity() {
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         scaleDetector.onTouchEvent(event)
         if (scaling || event.pointerCount > 1) return true
+
+        // Horizontal panning is applied here and the event is still passed on, so the list scrolls
+        // vertically from the same drag — that is what makes a diagonal drag work.
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> lastTouchX = event.x
+            MotionEvent.ACTION_MOVE -> {
+                pan(event.x - lastTouchX)
+                lastTouchX = event.x
+            }
+        }
         return super.dispatchTouchEvent(event)
+    }
+
+    private fun pan(dx: Float) {
+        val overflow = (binding.pages.width - binding.pagesViewport.width).toFloat()
+        if (overflow <= 0f) {
+            panX = 0f
+        } else {
+            panX = (panX + dx).coerceIn(-overflow, 0f)
+        }
+        binding.pages.translationX = panX
     }
 
     override fun onResume() {
@@ -88,7 +112,7 @@ class PdfActivity : AppCompatActivity() {
                 val opened = withContext(Dispatchers.IO) { PdfDocument.open(file) }
                 document = opened
                 binding.loading.visibility = View.GONE
-                baseWidth = binding.pagesScroller.width.takeIf { it > 0 }
+                baseWidth = binding.pagesViewport.width.takeIf { it > 0 }
                     ?: resources.displayMetrics.widthPixels
                 applyZoom()
                 updateIndicator()
@@ -109,11 +133,14 @@ class PdfActivity : AppCompatActivity() {
         val width = (baseWidth * zoom).roundToInt().coerceAtLeast(1)
         binding.pages.layoutParams = binding.pages.layoutParams.apply { this.width = width }
         binding.pages.requestLayout()
+        binding.pages.scaleX = 1f
+        binding.pages.scaleY = 1f
         binding.pages.adapter = PdfPageAdapter(
             document = doc,
             scope = lifecycleScope,
             renderWidth = width.coerceAtMost(MAX_RENDER_WIDTH),
         )
+        binding.pages.post { pan(0f) }
     }
 
     private inner class ZoomListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -123,22 +150,30 @@ class PdfActivity : AppCompatActivity() {
         override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
             scaling = true
             pending = zoom
+            binding.pages.pivotX = detector.focusX - binding.pages.translationX
+            binding.pages.pivotY = detector.focusY
             return true
         }
 
         override fun onScale(detector: ScaleGestureDetector): Boolean {
             pending = (pending * detector.scaleFactor).coerceIn(MIN_ZOOM, MAX_ZOOM)
+            // Rasterising every frame would be far too slow on this hardware, so the gesture is
+            // previewed by scaling the already-drawn pages and the pages are redrawn afterwards.
+            val preview = pending / zoom
+            binding.pages.scaleX = preview
+            binding.pages.scaleY = preview
             return true
         }
 
         override fun onScaleEnd(detector: ScaleGestureDetector) {
             scaling = false
-            // Re-rasterising every frame of the pinch would be far too slow, so the new scale is
-            // applied once the gesture settles.
             if (pending != zoom) {
                 zoom = pending
                 DebugLog.log("pdf", "zoom=$zoom")
                 applyZoom()
+            } else {
+                binding.pages.scaleX = 1f
+                binding.pages.scaleY = 1f
             }
         }
     }
