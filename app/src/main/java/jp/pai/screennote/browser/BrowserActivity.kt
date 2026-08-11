@@ -61,8 +61,6 @@ class BrowserActivity : AppCompatActivity() {
         DebugLog.log("app", "ua=${binding.webView.settings.userAgentString}")
         logUiMode("create")
 
-        binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }
-
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (binding.webView.canGoBack()) {
@@ -224,7 +222,6 @@ class BrowserActivity : AppCompatActivity() {
         binding.errorText.visibility = View.VISIBLE
         binding.errorText.text = getString(R.string.load_error, summary, url)
         binding.progress.visibility = View.INVISIBLE
-        binding.swipeRefresh.isRefreshing = false
     }
 
     private fun clearLoadError() {
@@ -352,7 +349,6 @@ class BrowserActivity : AppCompatActivity() {
         override fun onPageFinished(view: WebView, url: String) {
             DebugLog.log("nav", "finished $url")
             binding.urlBar.setText(url)
-            binding.swipeRefresh.isRefreshing = false
             binding.progress.visibility = View.INVISIBLE
         }
 

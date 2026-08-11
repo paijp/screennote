@@ -14,14 +14,18 @@ self-update path so the app can be kept current on a device without a store.
 
 | Area | Behaviour |
 | --- | --- |
-| Browsing | URL/search bar, back navigation, pull-to-refresh, pinch zoom, page progress, desktop-site toggle, light/dark theme |
+| Browsing | URL/search bar, back navigation, pinch zoom, page progress, desktop-site toggle, light/dark theme |
 | PDF | Links ending in `.pdf`, `application/pdf` downloads, and `ACTION_VIEW` intents from other apps open in the built-in viewer |
-| PDF viewer | Continuous vertical scroll, lazy page rendering with an LRU cache, page indicator |
+| PDF viewer | Continuous vertical scroll, pinch zoom with horizontal panning, lazy page rendering with an LRU cache, page indicator |
 | Autofill | `importantForAutofill=YES` on the WebView, plus `AutofillManager.commit()` on navigation so the "save password?" prompt fires |
 | Updates | On launch (silently) and from the menu, reads `release/latest.json` on the default branch and offers to download and install a newer APK |
 
-Not yet implemented: the note-taking and capture features themselves, PDF text selection/search,
-and pinch zoom inside the PDF viewer.
+Not yet implemented: the note-taking and capture features themselves, and PDF text
+selection/search.
+
+Pull-to-refresh was removed: `SwipeRefreshLayout` wrapping the WebView coincided with rendering
+artefacts while zoomed (white rectangles over page content, the toolbar flashing). Reload lives in
+the overflow menu.
 
 ## Building
 
