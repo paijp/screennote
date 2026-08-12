@@ -12,13 +12,12 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean(KEY_DESKTOP_SITE, false)
         set(value) = prefs.edit().putBoolean(KEY_DESKTOP_SITE, value).apply()
 
-    /**
-     * Renders the page into a software layer instead of a GPU-backed one. Slower to scroll, but
-     * it bypasses the tile rasteriser that produces white blocks over content on this device.
-     */
-    var softwareRendering: Boolean
-        get() = prefs.getBoolean(KEY_SOFTWARE_RENDERING, false)
-        set(value) = prefs.edit().putBoolean(KEY_SOFTWARE_RENDERING, value).apply()
+    /** Stored value of a `RenderMode`; see that type for what the choices mean. */
+    var renderMode: String?
+        get() = prefs.getString(KEY_RENDER_MODE, null)
+            // Carried over from when this was a plain software-rendering switch.
+            ?: if (prefs.getBoolean(KEY_SOFTWARE_RENDERING, false)) "software" else null
+        set(value) = prefs.edit().putString(KEY_RENDER_MODE, value).apply()
 
     /** One of the `AppCompatDelegate.MODE_NIGHT_*` constants. */
     var nightMode: Int
@@ -29,5 +28,6 @@ class Prefs(context: Context) {
         const val KEY_DESKTOP_SITE = "desktop_site"
         const val KEY_NIGHT_MODE = "night_mode"
         const val KEY_SOFTWARE_RENDERING = "software_rendering"
+        const val KEY_RENDER_MODE = "render_mode"
     }
 }

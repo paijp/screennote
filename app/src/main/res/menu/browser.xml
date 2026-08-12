@@ -11,9 +11,8 @@
         android:checkable="true"
         app:showAsAction="never" />
     <item
-        android:id="@+id/action_software_rendering"
-        android:title="@string/action_software_rendering"
-        android:checkable="true"
+        android:id="@+id/action_render_mode"
+        android:title="@string/action_render_mode"
         app:showAsAction="never" />
     <item
         android:id="@+id/action_theme"

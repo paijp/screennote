@@ -205,13 +205,14 @@ class BrowserActivity : AppCompatActivity() {
 
     /**
      * The white blocks that appear over page content while zoomed come from WebView's own tile
-     * rasteriser, which the app cannot reach. Drawing into a software layer sidesteps it entirely
-     * at the cost of scrolling smoothness, so it is offered as a choice rather than imposed.
+     * rasteriser, which the app cannot reach directly. The available raster paths differ in what
+     * they cost, and which one this device needs is a question only the device can answer, so the
+     * choice is offered rather than imposed. See [RenderMode].
      */
     private fun applyRenderingMode() {
-        val layer = if (prefs.softwareRendering) View.LAYER_TYPE_SOFTWARE else View.LAYER_TYPE_NONE
-        binding.webView.setLayerType(layer, null)
-        DebugLog.log("view", "software=${prefs.softwareRendering}")
+        val mode = RenderMode.from(prefs.renderMode)
+        mode.applyTo(binding.webView)
+        DebugLog.log("view", "render=${mode.storedValue}")
     }
 
     private fun configureUrlBar() {
@@ -273,7 +274,6 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         menu.findItem(R.id.action_desktop_site)?.isChecked = prefs.desktopSite
-        menu.findItem(R.id.action_software_rendering)?.isChecked = prefs.softwareRendering
         return super.onPrepareOptionsMenu(menu)
     }
 
@@ -289,11 +289,8 @@ class BrowserActivity : AppCompatActivity() {
             applyViewMode(reload = true)
             true
         }
-        R.id.action_software_rendering -> {
-            prefs.softwareRendering = !prefs.softwareRendering
-            item.isChecked = prefs.softwareRendering
-            applyRenderingMode()
-            binding.webView.reload()
+        R.id.action_render_mode -> {
+            showRenderModeChooser()
             true
         }
         R.id.action_theme -> {
@@ -309,6 +306,25 @@ class BrowserActivity : AppCompatActivity() {
             true
         }
         else -> super.onOptionsItemSelected(item)
+    }
+
+    private fun showRenderModeChooser() {
+        val modes = RenderMode.entries
+        val current = modes.indexOf(RenderMode.from(prefs.renderMode))
+        AlertDialog.Builder(this)
+            .setTitle(R.string.action_render_mode)
+            .setSingleChoiceItems(
+                modes.map { getString(it.labelRes) }.toTypedArray(),
+                current,
+            ) { dialog, which ->
+                prefs.renderMode = modes[which].storedValue
+                applyRenderingMode()
+                dialog.dismiss()
+                // The raster path changes what is already on screen, so redraw from scratch.
+                binding.webView.reload()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     /**

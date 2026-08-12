@@ -26,8 +26,10 @@ selection/search.
 Pull-to-refresh was removed: `SwipeRefreshLayout` wrapping the WebView coincided with rendering
 artefacts while zoomed (white rectangles over page content, the toolbar flashing). Reload lives in
 the overflow menu. Those artefacts come from WebView's own tile rasteriser and outlived the
-change, so the menu also offers **software rendering**, which bypasses the GPU raster path at the
-cost of scrolling smoothness.
+change — WebView draws through the host app's hardware-accelerated canvas instead of owning its
+surface, which is why a full Chromium browser on the same device is unaffected. The menu therefore
+offers a **rendering mode**: GPU (default), offscreen pre-raster (keeps the GPU, changes the raster
+path, costs memory), or software (bypasses GPU raster entirely, costs smoothness).
 
 ## Building
 

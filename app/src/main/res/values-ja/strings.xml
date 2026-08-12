@@ -15,7 +15,10 @@
     <string name="update_later">あとで</string>
     <string name="update_needs_permission">不明なアプリのインストールを許可してください。次の画面で有効にしてから、もう一度お試しください。</string>
     <string name="action_desktop_site">デスクトップ表示</string>
-    <string name="action_software_rendering">ソフトウェア描画</string>
+    <string name="action_render_mode">描画モード</string>
+    <string name="render_mode_gpu">GPU（既定）</string>
+    <string name="render_mode_offscreen">オフスクリーン</string>
+    <string name="render_mode_software">ソフトウェア</string>
     <string name="action_theme">テーマ</string>
     <string name="theme_system">システムに従う</string>
     <string name="theme_light">ライト</string>
