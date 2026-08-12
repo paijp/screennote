@@ -38,6 +38,10 @@ class PdfActivity : AppCompatActivity() {
     private var panX = 0f
     private var lastTouchX = 0f
 
+    /** Viewport coordinates the current pinch is anchored on. */
+    private var focusX = 0f
+    private var focusY = 0f
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityPdfBinding.inflate(layoutInflater)
@@ -128,7 +132,7 @@ class PdfActivity : AppCompatActivity() {
      * [MAX_RENDER_WIDTH] — past it the bitmap is scaled up instead, which costs some sharpness at
      * high zoom but keeps a full-page bitmap within reach on a low-memory device.
      */
-    private fun applyZoom() {
+    private fun applyZoom(anchor: Anchor? = null) {
         val doc = document ?: return
         val width = (baseWidth * zoom).roundToInt().coerceAtLeast(1)
         binding.pages.layoutParams = binding.pages.layoutParams.apply { this.width = width }
@@ -140,7 +144,37 @@ class PdfActivity : AppCompatActivity() {
             scope = lifecycleScope,
             renderWidth = width.coerceAtMost(MAX_RENDER_WIDTH),
         )
+        if (anchor != null) {
+            // Takes effect on the layout pass the new adapter triggers.
+            (binding.pages.layoutManager as? LinearLayoutManager)
+                ?.scrollToPositionWithOffset(anchor.position, anchor.offset)
+            panX = anchor.panX
+        }
+        // Clamping needs the laid-out width, which is only known after that pass.
         binding.pages.post { pan(0f) }
+    }
+
+    /**
+     * Where the viewport should sit once the pages have been redrawn at a new zoom: the item under
+     * the pinch, how far down the viewport that item's top should land, and the horizontal pan.
+     *
+     * Without this the redraw lands wherever the fresh layout happens to start, and the page jumps
+     * away from the position the pinch preview showed.
+     */
+    private data class Anchor(val position: Int, val offset: Int, val panX: Float)
+
+    /** Reproduces, in post-zoom coordinates, the point the preview transform held still. */
+    private fun anchorFor(factor: Float): Anchor? {
+        val x = (focusX - panX).coerceIn(0f, (binding.pages.width - 1).toFloat())
+        val child = binding.pages.findChildViewUnder(x, focusY) ?: return null
+        val position = binding.pages.getChildAdapterPosition(child)
+        if (position == RecyclerView.NO_POSITION) return null
+        val withinChild = focusY - child.top
+        return Anchor(
+            position = position,
+            offset = (focusY - withinChild * factor).roundToInt(),
+            panX = focusX - (focusX - panX) * factor,
+        )
     }
 
     private inner class ZoomListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -150,8 +184,11 @@ class PdfActivity : AppCompatActivity() {
         override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
             scaling = true
             pending = zoom
-            binding.pages.pivotX = detector.focusX - binding.pages.translationX
-            binding.pages.pivotY = detector.focusY
+            focusX = detector.focusX
+            focusY = detector.focusY
+            // The preview scales about the same point the redraw will anchor on.
+            binding.pages.pivotX = focusX - panX
+            binding.pages.pivotY = focusY
             return true
         }
 
@@ -168,9 +205,10 @@ class PdfActivity : AppCompatActivity() {
         override fun onScaleEnd(detector: ScaleGestureDetector) {
             scaling = false
             if (pending != zoom) {
+                val anchor = anchorFor(pending / zoom)
                 zoom = pending
-                DebugLog.log("pdf", "zoom=$zoom")
-                applyZoom()
+                DebugLog.log("pdf", "zoom=$zoom anchor=$anchor")
+                applyZoom(anchor)
             } else {
                 binding.pages.scaleX = 1f
                 binding.pages.scaleY = 1f
