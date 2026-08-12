@@ -14,7 +14,7 @@ import jp.pai.screennote.R
  */
 enum class RenderMode(val storedValue: String, val labelRes: Int) {
 
-    /** WebView's default: rasterised on the GPU, composited into the app's canvas. */
+    /** WebView's own default: rasterised on the GPU, composited into the app's canvas. */
     GPU("gpu", R.string.render_mode_gpu),
 
     /**
@@ -36,7 +36,14 @@ enum class RenderMode(val storedValue: String, val labelRes: Int) {
     }
 
     companion object {
+        /**
+         * SOFTWARE, not GPU: on the device this app is built for it is the only path measured to
+         * be free of the artefacts, and offscreen pre-raster turned out not to help. The faster
+         * paths stay selectable for hardware that does not need this.
+         */
+        val DEFAULT = SOFTWARE
+
         fun from(storedValue: String?): RenderMode =
-            entries.firstOrNull { it.storedValue == storedValue } ?: GPU
+            entries.firstOrNull { it.storedValue == storedValue } ?: DEFAULT
     }
 }

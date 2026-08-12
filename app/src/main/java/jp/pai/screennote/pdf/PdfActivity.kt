@@ -38,7 +38,13 @@ class PdfActivity : AppCompatActivity() {
     private var panX = 0f
     private var lastTouchX = 0f
 
-    /** Viewport coordinates the current pinch is anchored on. */
+    /**
+     * The point the current pinch is anchored on, in the page column's own coordinates.
+     *
+     * [ScaleGestureDetector] reports the focus in window coordinates, which sit lower than the
+     * column by the height of the status bar and toolbar. Anchoring on the unconverted value picks
+     * a point tens of dp away — often inside the neighbouring page.
+     */
     private var focusX = 0f
     private var focusY = 0f
 
@@ -90,6 +96,10 @@ class PdfActivity : AppCompatActivity() {
         }
         return super.dispatchTouchEvent(event)
     }
+
+    /** Window coordinates of the viewport's top-left, for converting touch positions into it. */
+    private fun viewportOrigin(): IntArray =
+        IntArray(2).also { binding.pagesViewport.getLocationInWindow(it) }
 
     private fun pan(dx: Float) {
         val overflow = (binding.pages.width - binding.pagesViewport.width).toFloat()
@@ -184,8 +194,9 @@ class PdfActivity : AppCompatActivity() {
         override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
             scaling = true
             pending = zoom
-            focusX = detector.focusX
-            focusY = detector.focusY
+            val origin = viewportOrigin()
+            focusX = detector.focusX - origin[0]
+            focusY = detector.focusY - origin[1]
             // The preview scales about the same point the redraw will anchor on.
             binding.pages.pivotX = focusX - panX
             binding.pages.pivotY = focusY
@@ -207,7 +218,7 @@ class PdfActivity : AppCompatActivity() {
             if (pending != zoom) {
                 val anchor = anchorFor(pending / zoom)
                 zoom = pending
-                DebugLog.log("pdf", "zoom=$zoom anchor=$anchor")
+                DebugLog.log("pdf", "zoom=$zoom focus=($focusX,$focusY) anchor=$anchor")
                 applyZoom(anchor)
             } else {
                 binding.pages.scaleX = 1f

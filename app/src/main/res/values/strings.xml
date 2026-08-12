@@ -19,9 +19,9 @@
     <string name="update_needs_permission">Screennote needs permission to install apps from this source. Enable it on the next screen, then try again.</string>
     <string name="action_desktop_site">Desktop site</string>
     <string name="action_render_mode">Rendering mode</string>
-    <string name="render_mode_gpu">GPU (default)</string>
+    <string name="render_mode_gpu">GPU</string>
     <string name="render_mode_offscreen">Offscreen pre-raster</string>
-    <string name="render_mode_software">Software</string>
+    <string name="render_mode_software">Software (recommended)</string>
     <string name="action_theme">Theme</string>
     <string name="theme_system">Follow system</string>
     <string name="theme_light">Light</string>

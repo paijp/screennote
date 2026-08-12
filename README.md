@@ -28,8 +28,10 @@ artefacts while zoomed (white rectangles over page content, the toolbar flashing
 the overflow menu. Those artefacts come from WebView's own tile rasteriser and outlived the
 change — WebView draws through the host app's hardware-accelerated canvas instead of owning its
 surface, which is why a full Chromium browser on the same device is unaffected. The menu therefore
-offers a **rendering mode**: GPU (default), offscreen pre-raster (keeps the GPU, changes the raster
-path, costs memory), or software (bypasses GPU raster entirely, costs smoothness).
+offers a **rendering mode**: GPU, offscreen pre-raster (keeps the GPU, changes the raster path,
+costs memory), or software (bypasses GPU raster entirely, costs smoothness). Only software cleared
+the artefacts on the target device, so it is the default; the others remain selectable for
+hardware that does not need it.
 
 ## Building
 
