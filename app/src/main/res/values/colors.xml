@@ -9,4 +9,9 @@
     <color name="surface">#FFFBFE</color>
     <color name="on_surface">#1C1B1F</color>
     <color name="on_surface_variant">#49454F</color>
+
+    <!-- Deliberately not overridden in values-night. This marks "something other than you is
+         driving this page", and a status signal that changes colour with the theme is one the
+         user has to think about before reading. -->
+    <color name="agent_control">#E8710A</color>
 </resources>

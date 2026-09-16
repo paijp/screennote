@@ -19,6 +19,16 @@ class Prefs(context: Context) {
             ?: if (prefs.getBoolean(KEY_SOFTWARE_RENDERING, false)) "software" else null
         set(value) = prefs.edit().putString(KEY_RENDER_MODE, value).apply()
 
+    /**
+     * Whether leaving the app should keep the page live in Picture in Picture rather than
+     * letting it stop. Persisted so it survives the activity being recreated, not so it
+     * survives a restart: [BrowserActivity] clears it on a cold start, since control should
+     * never be on without the user having just asked for it.
+     */
+    var agentControl: Boolean
+        get() = prefs.getBoolean(KEY_AGENT_CONTROL, false)
+        set(value) = prefs.edit().putBoolean(KEY_AGENT_CONTROL, value).apply()
+
     /** One of the `AppCompatDelegate.MODE_NIGHT_*` constants. */
     var nightMode: Int
         get() = prefs.getInt(KEY_NIGHT_MODE, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
@@ -29,5 +39,6 @@ class Prefs(context: Context) {
         const val KEY_NIGHT_MODE = "night_mode"
         const val KEY_SOFTWARE_RENDERING = "software_rendering"
         const val KEY_RENDER_MODE = "render_mode"
+        const val KEY_AGENT_CONTROL = "agent_control"
     }
 }

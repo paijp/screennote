@@ -6,6 +6,16 @@
         android:title="@string/action_reload"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_agent_control"
+        android:title="@string/action_agent_control"
+        android:checkable="true"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_dom_probe"
+        android:title="@string/action_dom_probe"
+        android:checkable="true"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_desktop_site"
         android:title="@string/action_desktop_site"
         android:checkable="true"

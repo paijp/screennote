@@ -1,18 +1,24 @@
 package jp.pai.screennote.browser
 
 import android.annotation.SuppressLint
+import android.app.PictureInPictureParams
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.Rational
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.view.autofill.AutofillManager
@@ -53,6 +59,36 @@ class BrowserActivity : AppCompatActivity() {
      */
     private lateinit var palette: Palette
 
+    /**
+     * The page's size while the activity had the whole screen. The WebView keeps being laid
+     * out at this size in PiP — see [PipScale] for why — so it has to be remembered from
+     * before the transition, when it is still the container's own size.
+     */
+    private var fullWidth = 0
+    private var fullHeight = 0
+
+    /**
+     * Set between asking for PiP and being told it happened.
+     *
+     * The container is relaid out at the small size during that gap, and
+     * `isInPictureInPictureMode` is not reliably true yet — so without this the layout
+     * listener would record the PiP window as the full-screen size and the page would be
+     * scaled against itself from then on.
+     */
+    private var enteringPip = false
+
+    private val probeHandler = Handler(Looper.getMainLooper())
+    private var probing = false
+    private val probeTick = object : Runnable {
+        override fun run() {
+            DomProbe.run(binding.webView, if (isInPictureInPictureMode) "pip" else "full")
+            probeHandler.postDelayed(this, DomProbe.INTERVAL_MS)
+        }
+    }
+
+    private val pipSupported: Boolean
+        get() = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityBrowserBinding.inflate(layoutInflater)
@@ -64,8 +100,16 @@ class BrowserActivity : AppCompatActivity() {
         palette = Palette.of(prefs.nightMode, resources.configuration)
         applyPalette()
 
+        // Control is never on across a cold start: it means "I have just handed this page
+        // over", and a flag left set from days ago is not that. A recreation (theme change,
+        // low memory) passes a savedInstanceState and keeps it.
+        if (savedInstanceState == null) {
+            prefs.agentControl = false
+        }
+
         configureWebView()
         configureUrlBar()
+        configureAgentControl()
 
         DebugLog.log("app", "start ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         DebugLog.log("app", "ua=${binding.webView.settings.userAgentString}")
@@ -229,6 +273,139 @@ class BrowserActivity : AppCompatActivity() {
         }
     }
 
+    // ── Agent control / Picture in Picture ──────────────────────────────────────────────
+    //
+    // On a phone there is only one screen, so handing the page to an agent means the user
+    // leaves for another app — and a stopped activity stops laying its WebView out. The page
+    // keeps running its timers, but every element measures zero by zero, which reads as a
+    // page that loaded and turned out to be empty. PiP is the cheap way out: a PiP activity
+    // is paused but never stopped, so layout and drawing carry on.
+
+    private fun configureAgentControl() {
+        binding.webViewContainer.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            if (isInPictureInPictureMode) {
+                applyPipScale(v.width, v.height)
+            } else if (!enteringPip && v.width > 0 && v.height > 0) {
+                // The only place the full-screen size is known for certain.
+                fullWidth = v.width
+                fullHeight = v.height
+            }
+        }
+        applyAgentControlIndicator()
+    }
+
+    private fun applyAgentControlIndicator() {
+        binding.agentIndicator.visibility =
+            if (prefs.agentControl) View.VISIBLE else View.GONE
+    }
+
+    private fun toggleAgentControl() {
+        if (!prefs.agentControl && !pipSupported) {
+            Toast.makeText(this, R.string.agent_control_unsupported, Toast.LENGTH_LONG).show()
+            return
+        }
+        prefs.agentControl = !prefs.agentControl
+        applyAgentControlIndicator()
+        DebugLog.log("agent", "control=${prefs.agentControl}")
+        Toast.makeText(
+            this,
+            if (prefs.agentControl) R.string.action_agent_control_on
+            else R.string.action_agent_control_off,
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+
+    /**
+     * Called as the user leaves for another app. Note that on this platform version the
+     * recents button does not always route through here, only Home reliably does — so if the
+     * page stops when switching apps one way but not the other, this is why. The log line is
+     * there to tell those two cases apart.
+     */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        DebugLog.log("agent", "userLeaveHint control=${prefs.agentControl}")
+        if (!prefs.agentControl || !pipSupported || isInPictureInPictureMode) return
+
+        // Last moment at which the container is still full screen.
+        binding.webViewContainer.let {
+            if (it.width > 0 && it.height > 0) {
+                fullWidth = it.width
+                fullHeight = it.height
+            }
+        }
+        enteringPip = true
+        runCatching {
+            enterPictureInPictureMode(
+                PictureInPictureParams.Builder()
+                    .setAspectRatio(Rational(9, 16))
+                    .build()
+            )
+        }.onFailure {
+            enteringPip = false
+            DebugLog.log("agent", "enterPip failed: $it")
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        enteringPip = false
+        DebugLog.log("agent", "pip=$isInPictureInPictureMode full=${fullWidth}x$fullHeight")
+
+        // The chrome is not useful at this size, and giving its space to the page keeps the
+        // scale factor as large as it can be.
+        val chrome = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
+        binding.toolbar.visibility = chrome
+
+        val lp = binding.webView.layoutParams
+        if (isInPictureInPictureMode) {
+            // Pin the WebView to the size it had on screen. Letting it shrink to the PiP
+            // window would change the viewport, and responsive sites would re-lay out for a
+            // 300dp screen — taking every element's coordinates with them.
+            if (fullWidth > 0 && fullHeight > 0) {
+                lp.width = fullWidth
+                lp.height = fullHeight
+            }
+            binding.webView.pivotX = 0f
+            binding.webView.pivotY = 0f
+        } else {
+            lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+            lp.height = ViewGroup.LayoutParams.MATCH_PARENT
+            binding.webView.scaleX = 1f
+            binding.webView.scaleY = 1f
+            binding.webView.translationX = 0f
+            binding.webView.translationY = 0f
+        }
+        binding.webView.layoutParams = lp
+
+        // Straight after the transition is exactly when the "laid out or not" question gets
+        // answered, so record it whether or not the repeating probe is running.
+        binding.webView.post {
+            DomProbe.run(binding.webView, if (isInPictureInPictureMode) "pip-enter" else "pip-exit")
+        }
+    }
+
+    private fun applyPipScale(windowWidth: Int, windowHeight: Int) {
+        val fit = PipScale.fit(windowWidth, windowHeight, fullWidth, fullHeight)
+        binding.webView.scaleX = fit.scale
+        binding.webView.scaleY = fit.scale
+        binding.webView.translationX = fit.translationX
+        binding.webView.translationY = fit.translationY
+    }
+
+    private fun toggleProbe() {
+        probing = !probing
+        probeHandler.removeCallbacks(probeTick)
+        if (probing) probeHandler.post(probeTick)
+        Toast.makeText(
+            this,
+            if (probing) R.string.dom_probe_on else R.string.dom_probe_off,
+            Toast.LENGTH_SHORT,
+        ).show()
+    }
+
     private fun loadUrl(url: String) {
         if (UrlUtils.looksLikePdf(url)) {
             openPdf(url)
@@ -274,10 +451,22 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         menu.findItem(R.id.action_desktop_site)?.isChecked = prefs.desktopSite
+        menu.findItem(R.id.action_agent_control)?.isChecked = prefs.agentControl
+        menu.findItem(R.id.action_dom_probe)?.isChecked = probing
         return super.onPrepareOptionsMenu(menu)
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
+        R.id.action_agent_control -> {
+            toggleAgentControl()
+            item.isChecked = prefs.agentControl
+            true
+        }
+        R.id.action_dom_probe -> {
+            toggleProbe()
+            item.isChecked = probing
+            true
+        }
         R.id.action_reload -> {
             clearLoadError()
             binding.webView.reload()
@@ -378,6 +567,7 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        probeHandler.removeCallbacks(probeTick)
         binding.webView.destroy()
         super.onDestroy()
     }

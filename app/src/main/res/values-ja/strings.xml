@@ -14,6 +14,13 @@
     <string name="update_install">インストール</string>
     <string name="update_later">あとで</string>
     <string name="update_needs_permission">不明なアプリのインストールを許可してください。次の画面で有効にしてから、もう一度お試しください。</string>
+    <string name="action_agent_control">エージェント操作</string>
+    <string name="action_agent_control_on">エージェント操作を有効にしました。アプリを離れると、このページは小窓のまま動き続けます。</string>
+    <string name="action_agent_control_off">エージェント操作を無効にしました。</string>
+    <string name="agent_control_unsupported">この端末はピクチャー イン ピクチャーに対応していません。</string>
+    <string name="action_dom_probe">DOM を計測（デバッグ）</string>
+    <string name="dom_probe_on">3秒ごとに計測します。結果はデバッグログに出ます。</string>
+    <string name="dom_probe_off">計測を停止しました。</string>
     <string name="action_desktop_site">デスクトップ表示</string>
     <string name="action_render_mode">描画モード</string>
     <string name="render_mode_gpu">GPU</string>

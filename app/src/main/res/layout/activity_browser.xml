@@ -42,6 +42,7 @@
         android:visibility="invisible" />
 
     <FrameLayout
+        android:id="@+id/webViewContainer"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
@@ -50,6 +51,19 @@
             android:id="@+id/webView"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
+
+        <!--
+            Shown whenever agent control is on. It sits over the WebView rather than in the
+            toolbar because the toolbar is hidden in PiP, and PiP is exactly when the user
+            needs to be able to see that something else is driving the page.
+        -->
+        <View
+            android:id="@+id/agentIndicator"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_gravity="top"
+            android:background="@color/agent_control"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/errorText"
