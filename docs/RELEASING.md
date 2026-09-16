@@ -111,3 +111,32 @@ Two consequences worth remembering:
 If the install dialog reports a signature mismatch, releases *N* and *N+1* were signed with
 different keys. If the download fails with "checksum mismatch", `release/latest.json` and
 `release/screennote-release.apk` are out of step — re-run the release.
+
+## Play Protect blocks new releases
+
+**Expect every release to be refused the first time.** Play Protect warns about "installing a
+harmful app" and then, if you accept, does nothing at all — no error, no entry anywhere. The
+previous release installs fine from the same screen, which makes it look like something is
+wrong with the new APK.
+
+Nothing is. Play Protect judges the binary, and a release minutes old is a binary it has never
+seen; the previous one has been in the wild long enough to be known. Japan is one of the
+regions where the stricter sideload checks are enabled, so this is the normal state here, not
+a fault to debug. Observed on 0.1.13, whose APK was verified intact, signed with the same key
+as 0.1.12, and identical in permissions and manifest structure.
+
+To install:
+
+1. Play Store → profile icon → **Play Protect** → ⚙ → turn **Scan apps with Play Protect** off
+2. Install the APK
+3. Turn scanning back on — the installed app is not flagged afterwards
+
+Worth knowing before chasing this again:
+
+- **A rebuild cannot be used to test a theory about it.** Any new build is a new binary with a
+  new hash, so it is refused for the same reason whatever is in it. Turn scanning off first,
+  or the experiment only reproduces the block.
+- The signing key can be checked without any Android tooling: both APKs' v2 signing blocks
+  hold the signer certificate, and comparing their SHA-256 settles "is this the same key?" in
+  one step. Note that `keytool -printcert -jarfile` does not work here — with minSdk 27 the
+  build omits the v1 JAR signature entirely, so there is nothing for it to read.

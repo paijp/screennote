@@ -192,9 +192,29 @@ H2 を採るなら:
 | **I2. PiP** | `onStop()` が呼ばれずレイアウトが継続する。Claude が何をしているか小窓で見える（**帯域外の検知チャネル**になる） | `configChanges` が必須で、現状のテーマ実装（`recreate()`）と衝突する。PiP のビューポートが小さいので `setScaleX/Y` で縮小する必要がある。**PiP 中は操作できない**ので `request_user` の導線が要る |
 | **I3. PiP + Foreground Service** | 画面消灯・放置に耐える | 型の選択（`specialUse`）と OEM 独自キラーへの対処 |
 
-**最初に確かめるべきは「PiP 中に `getBoundingClientRect()` が正しい値を返すか」。**
-ここが期待通りなら構想全体が成立する。→ 実装済み。メニューの「DOM を計測」を on にすると
-3 秒ごとに計測して `DebugLog` に出るので、全画面と PiP の値を並べて比べられる。
+**「PiP 中に `getBoundingClientRect()` が正しい値を返すか」— 実測済み、成立する。**
+
+BlackBerry BBF100-9 / Android 8.1 / WebView 138 での結果:
+
+```
+probe full       visible:46  iw:411 ih:526  first "A 89x34 @275,12"
+probe pip-enter  visible:46  iw:411 ih:526  first "A 89x34 @275,12"
+probe pip        visible:46  iw:411 ih:526  first "A 89x34 @275,12"
+```
+
+要素数・矩形・ビューポートがすべて一致。レイアウトは PiP 中も走っており、WebView を全画面
+サイズに固定する方式も効いている（ビューポートが 411x526 のまま変わっていない）。`configChanges`
+も効いていて、遷移では `configChanged` だけが出て Activity は再生成されない。`onUserLeaveHint`
+もこの端末では発火する。
+
+同じ計測で**出る側に不具合が見つかった**。PiP 終了時に `MATCH_PARENT` を戻すのが早く、窓が
+まだ小さいうちにレイアウトが走って、一瞬だけビューポートが 160x217 に落ちていた（`visible` が
+46→48 に変わっており、縮小ではなく本当の再レイアウト）。画面上は一瞬なので何も見えないが、
+その間にエージェントが読むと座標が全部ずれた状態を受け取る。窓が元の大きさに戻るまで固定
+サイズを保持するよう修正済み。
+
+メニューの「DOM を計測」を on にすると 3 秒ごとに計測して `DebugLog` に出るので、この比較は
+いつでも再現できる。
 
 同じ検証が**タブにも要る**: `GONE` にした WebView はレイアウトパスが走らず、要素が 1 つも
 見つからない。読むタブだけを一時的に `INVISIBLE` にしてレイアウトを 1 回走らせる、という
@@ -318,7 +338,7 @@ v1 ではその実装が 1 つしかない、という形にしておけば、�
 
 コードを書く前、あるいは eval が動いた直後に確かめる。どれも短時間で結論が出る。
 
-1. **PiP 中に `getBoundingClientRect()` が正しい値を返すか**（構想全体の前提）
+1. ~~**PiP 中に `getBoundingClientRect()` が正しい値を返すか**~~ — **成立**（上記 I 節）
 2. **`GONE` → `INVISIBLE` 直後の WebView で同じことが成り立つか**（タブ実装の前提）
 3. **BFCache が効くか** — `window.__mark = Date.now()` を仕込んで遷移し、戻って生きているか
 4. **`setJavaScriptCanOpenWindowsAutomatically(true)` で、Claude の `element.click()` から

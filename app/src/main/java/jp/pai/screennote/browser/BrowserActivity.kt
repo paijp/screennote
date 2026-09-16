@@ -77,6 +77,17 @@ class BrowserActivity : AppCompatActivity() {
      */
     private var enteringPip = false
 
+    /**
+     * Set between leaving PiP and the window being full size again.
+     *
+     * Restoring MATCH_PARENT the moment PiP ends lays the page out against a window that is
+     * still small — measured at 160x217 CSS pixels on the way out of a 411x526 page, which is
+     * small enough that responsive sites switch layout and every coordinate moves. It is
+     * brief, so nothing looks wrong on screen; an agent reading during that window silently
+     * gets the wrong page. The pinned size is held until the window has caught up.
+     */
+    private var leavingPip = false
+
     private val probeHandler = Handler(Looper.getMainLooper())
     private var probing = false
     private val probeTick = object : Runnable {
@@ -285,6 +296,14 @@ class BrowserActivity : AppCompatActivity() {
         binding.webViewContainer.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
             if (isInPictureInPictureMode) {
                 applyPipScale(v.width, v.height)
+            } else if (leavingPip) {
+                // Still shrinking back. Releasing the pinned size now would lay the page out
+                // at whatever intermediate size this pass has, so wait for the window to be
+                // itself again — and do not mistake an intermediate size for the real one.
+                if (v.width >= fullWidth && v.height >= fullHeight) {
+                    leavingPip = false
+                    v.post { unpinWebViewSize() }
+                }
             } else if (!enteringPip && v.width > 0 && v.height > 0) {
                 // The only place the full-screen size is known for certain.
                 fullWidth = v.width
@@ -359,32 +378,46 @@ class BrowserActivity : AppCompatActivity() {
         val chrome = if (isInPictureInPictureMode) View.GONE else View.VISIBLE
         binding.toolbar.visibility = chrome
 
-        val lp = binding.webView.layoutParams
         if (isInPictureInPictureMode) {
+            leavingPip = false
             // Pin the WebView to the size it had on screen. Letting it shrink to the PiP
             // window would change the viewport, and responsive sites would re-lay out for a
             // 300dp screen — taking every element's coordinates with them.
             if (fullWidth > 0 && fullHeight > 0) {
+                val lp = binding.webView.layoutParams
                 lp.width = fullWidth
                 lp.height = fullHeight
+                binding.webView.layoutParams = lp
             }
             binding.webView.pivotX = 0f
             binding.webView.pivotY = 0f
         } else {
-            lp.width = ViewGroup.LayoutParams.MATCH_PARENT
-            lp.height = ViewGroup.LayoutParams.MATCH_PARENT
+            // Drop the transform straight away — it is only a drawing matrix, so nothing has
+            // to be laid out for it — but keep the size pinned until the window is full again.
+            // The layout listener releases it, and until then the page never sees a viewport
+            // it did not already have.
             binding.webView.scaleX = 1f
             binding.webView.scaleY = 1f
             binding.webView.translationX = 0f
             binding.webView.translationY = 0f
+            leavingPip = fullWidth > 0 && fullHeight > 0
+            if (!leavingPip) unpinWebViewSize()
         }
-        binding.webView.layoutParams = lp
 
         // Straight after the transition is exactly when the "laid out or not" question gets
         // answered, so record it whether or not the repeating probe is running.
         binding.webView.post {
             DomProbe.run(binding.webView, if (isInPictureInPictureMode) "pip-enter" else "pip-exit")
         }
+    }
+
+    /** Hand sizing back to the layout now that the window is the size the page expects. */
+    private fun unpinWebViewSize() {
+        val lp = binding.webView.layoutParams
+        if (lp.width == ViewGroup.LayoutParams.MATCH_PARENT) return
+        lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+        lp.height = ViewGroup.LayoutParams.MATCH_PARENT
+        binding.webView.layoutParams = lp
     }
 
     private fun applyPipScale(windowWidth: Int, windowHeight: Int) {

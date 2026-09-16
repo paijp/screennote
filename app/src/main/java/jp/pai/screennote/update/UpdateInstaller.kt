@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import jp.pai.screennote.Prefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -68,6 +69,11 @@ object UpdateInstaller {
     }
 
     fun install(context: Context, apk: File) {
+        // The installer may not read the file until the user has been through its own screens,
+        // by which time this process can have been killed and restarted. Recording the attempt
+        // stops the cold-start cache sweep from deleting the APK in the meantime; see
+        // ScreennoteApp.
+        Prefs(context).pendingInstallAt = System.currentTimeMillis()
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apk)
         context.startActivity(
             Intent(Intent.ACTION_VIEW)

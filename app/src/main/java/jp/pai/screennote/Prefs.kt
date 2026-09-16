@@ -29,6 +29,19 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean(KEY_AGENT_CONTROL, false)
         set(value) = prefs.edit().putBoolean(KEY_AGENT_CONTROL, value).apply()
 
+    /**
+     * When an APK was last handed to the package installer, or 0.
+     *
+     * The installer reads the file only once the user has worked through its own screens,
+     * which can take a while — long enough for this process to be killed and started again.
+     * A cold start clears the update cache, so without this record the app can delete the APK
+     * out from under an install that is still on screen, and the install then does nothing
+     * with nothing to explain it.
+     */
+    var pendingInstallAt: Long
+        get() = prefs.getLong(KEY_PENDING_INSTALL_AT, 0L)
+        set(value) = prefs.edit().putLong(KEY_PENDING_INSTALL_AT, value).apply()
+
     /** One of the `AppCompatDelegate.MODE_NIGHT_*` constants. */
     var nightMode: Int
         get() = prefs.getInt(KEY_NIGHT_MODE, AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
@@ -40,5 +53,6 @@ class Prefs(context: Context) {
         const val KEY_SOFTWARE_RENDERING = "software_rendering"
         const val KEY_RENDER_MODE = "render_mode"
         const val KEY_AGENT_CONTROL = "agent_control"
+        const val KEY_PENDING_INSTALL_AT = "pending_install_at"
     }
 }
