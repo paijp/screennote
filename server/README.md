@@ -43,6 +43,25 @@ request that carries the replacement. Nor does it ever revoke a session or stop 
 either would hand anyone who can reach the endpoint a way to cut the user off by guessing
 badly.
 
+## What an agent can read
+
+`browser_log` returns the browser's own log — which is where everything the page cannot say
+ends up: a navigation refused, a certificate rejected, a link handed to another app. Without
+it the only route to that is the user copying the log out by hand, which is the friction this
+whole arrangement exists to remove.
+
+Two limits are part of the design rather than tidiness.
+
+**It starts at the handover.** The log holds every address visited since the app started.
+Handing over one page is not handing over where the user has been, so the session records
+where the log stood when agent control went on and never reads back past it.
+
+**`console` is the page's own words.** It is excluded unless asked for by name, and labelled
+when returned. A page writes its console and can write anything there, including text aimed at
+whoever reads it — the same channel as page content, but arriving dressed as the browser's own
+output, which is the part worth being explicit about. `browser_eval` attaches the console
+output from its own run for the same reason and with the same label.
+
 ## The agent token's lifetime
 
 A session is valid while the browser is there to serve it: every poll stamps `last_seen_at`,

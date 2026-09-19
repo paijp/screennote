@@ -27,20 +27,47 @@ object DebugLog {
      */
     private const val CAPACITY = 1500
 
-    data class Entry(val time: String, val area: String, val message: String) {
+    data class Entry(val seq: Long, val time: String, val area: String, val message: String) {
         override fun toString(): String = "$time [$area] $message"
     }
 
     private val entries = ArrayDeque<Entry>()
     private val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
+    private var nextSeq = 1L
 
     @Synchronized
     fun log(area: String, message: String) {
-        val entry = Entry(timestamp.format(Date()), area, message)
+        val entry = Entry(nextSeq++, timestamp.format(Date()), area, message)
         Log.d(TAG, entry.toString())
         entries.addLast(entry)
         while (entries.size > CAPACITY) entries.removeFirst()
     }
+
+    /**
+     * A point in the log to read forward from.
+     *
+     * Taken when agent control is switched on, so that what an agent can read starts where the
+     * user handed the browser over. Everything before that is the user's own browsing —
+     * including every address they visited — and handing over one page is not handing over
+     * that.
+     */
+    @Synchronized
+    fun mark(): Long = nextSeq
+
+    /**
+     * Entries from [since] onwards, most recent [limit] of them.
+     *
+     * Page-authored entries are not returned unless asked for by name: `console` is written by
+     * whatever the page chooses to log, so it is both the bulkiest area and the one that can
+     * be aimed at whoever reads it.
+     */
+    @Synchronized
+    fun since(since: Long, areas: Set<String>?, limit: Int): List<Entry> =
+        entries.asSequence()
+            .filter { it.seq >= since }
+            .filter { if (areas == null) it.area != "console" else it.area in areas }
+            .toList()
+            .takeLast(limit.coerceIn(1, 500))
 
     /** The areas currently present, in the order they are usually wanted. */
     @Synchronized

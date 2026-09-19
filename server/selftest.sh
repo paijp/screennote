@@ -166,6 +166,7 @@ chmod g+x "$RELAY_DIR/mcp-hash"
 LIST=$(mcp "$TOKEN" '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
 has "browser_status is listed" "$LIST" 'browser_status'
 has "browser_eval is listed" "$LIST" 'browser_eval'
+has "browser_log is listed" "$LIST" 'browser_log'
 has "descriptions survive the null probe" "$LIST" 'Run JavaScript in the page'
 has "agent_token is required" "$LIST" '"required"'
 hasnt "listing tools does not open a session" "$LIST" 'agent_token_mac'
@@ -205,6 +206,9 @@ sleep 1
 
 has "eval reaches the browser and the answer comes back" \
     "$(call browser_eval "{\"agent_token\":\"$AT\",\"js\":\"1+1\"}")" '"value": 42'
+
+has "the log is fetched from the browser, not the relay" \
+    "$(call browser_log "{\"agent_token\":\"$AT\"}")" '"value": 42'
 
 echo "== a browser that polls but never answers =="
 
