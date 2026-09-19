@@ -31,7 +31,7 @@ function relay_cfg(string $name, mixed $default): mixed
  * The phone polls on an adaptive interval that stretches to a few seconds when idle, so this
  * has to be a comfortable multiple of the slowest interval rather than a tight bound.
  */
-define('RELAY_CONNECTED_SECONDS', (int) (getenv('RELAY_CONNECTED_SECONDS') ?: 15));
+defined('RELAY_CONNECTED_SECONDS') || define('RELAY_CONNECTED_SECONDS', (int) (getenv('RELAY_CONNECTED_SECONDS') ?: 15));
 
 /**
  * How long after its last poll a session is still valid.
@@ -40,7 +40,7 @@ define('RELAY_CONNECTED_SECONDS', (int) (getenv('RELAY_CONNECTED_SECONDS') ?: 15
  * makes "short-lived" mean something without cutting a long task off mid-way: a session stays
  * valid exactly as long as the browser is there to serve it, and dies shortly after it is not.
  */
-define('RELAY_VALID_SECONDS', (int) (getenv('RELAY_VALID_SECONDS') ?: 300));
+defined('RELAY_VALID_SECONDS') || define('RELAY_VALID_SECONDS', (int) (getenv('RELAY_VALID_SECONDS') ?: 300));
 
 /**
  * Slowing down token guessing.
@@ -56,10 +56,10 @@ define('RELAY_VALID_SECONDS', (int) (getenv('RELAY_VALID_SECONDS') ?: 300));
  * much higher counts, where the point is no longer guessing but keeping a flood of requests
  * from sitting in sleep() and occupying every worker the pool has.
  */
-define('RELAY_SLOW_AFTER', (int) (getenv('RELAY_SLOW_AFTER') ?: 5));
-define('RELAY_SLOW_MS', (int) (getenv('RELAY_SLOW_MS') ?: 500));
-define('RELAY_BLOCK_AFTER', (int) (getenv('RELAY_BLOCK_AFTER') ?: 50));
-define('RELAY_ATTEMPT_WINDOW', (int) (getenv('RELAY_ATTEMPT_WINDOW') ?: 300));
+defined('RELAY_SLOW_AFTER') || define('RELAY_SLOW_AFTER', (int) (getenv('RELAY_SLOW_AFTER') ?: 5));
+defined('RELAY_SLOW_MS') || define('RELAY_SLOW_MS', (int) (getenv('RELAY_SLOW_MS') ?: 500));
+defined('RELAY_BLOCK_AFTER') || define('RELAY_BLOCK_AFTER', (int) (getenv('RELAY_BLOCK_AFTER') ?: 50));
+defined('RELAY_ATTEMPT_WINDOW') || define('RELAY_ATTEMPT_WINDOW', (int) (getenv('RELAY_ATTEMPT_WINDOW') ?: 300));
 
 /**
  * Pairing has its own budget.
@@ -68,7 +68,7 @@ define('RELAY_ATTEMPT_WINDOW', (int) (getenv('RELAY_ATTEMPT_WINDOW') ?: 300));
  * the guessing budget would mean a guesser could stop the phone from pairing at all — the
  * same mistake as letting failures revoke a session, wearing a different hat.
  */
-define('RELAY_PAIR_LIMIT', (int) (getenv('RELAY_PAIR_LIMIT') ?: 60));
+defined('RELAY_PAIR_LIMIT') || define('RELAY_PAIR_LIMIT', (int) (getenv('RELAY_PAIR_LIMIT') ?: 60));
 
 /**
  * Token alphabet: Crockford base32, which drops I, L, O and U so nothing in a token can be

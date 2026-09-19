@@ -20,9 +20,20 @@ declare(strict_types=1);
  * log, so nobody who reads that log can take the browser's place and answer for it.
  */
 
-// The deployed path, overridable from the environment so selftest.sh can run the real files
-// against a scratch directory instead of a copy that could drift from them.
-define('RELAY_DIR', getenv('RELAY_DIR') ?: '/opt/rbmcp/var');
+/**
+ * Host-local settings, if any.
+ *
+ * Deployment details — where the data lives, where mcpinner.php was installed, who may ask
+ * for a token — differ per host and do not belong in the repository. A config.php beside the
+ * entry file may define any of the constants below; whatever it leaves alone falls back to
+ * the environment, and then to the value here. The environment fallback exists for
+ * selftest.sh, which php-fpm never sees.
+ */
+if (is_file(__DIR__ . '/config.php')) {
+    require __DIR__ . '/config.php';
+}
+
+defined('RELAY_DIR') || define('RELAY_DIR', getenv('RELAY_DIR') ?: __DIR__ . '/var');
 
 require __DIR__ . '/relay.php';
 

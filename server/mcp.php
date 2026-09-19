@@ -21,17 +21,27 @@ declare(strict_types=1);
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 
-// The deployed paths, overridable from the environment so selftest.sh can run the real files
-// against a scratch directory instead of a copy that could drift from them.
+/**
+ * Host-local settings, if any.
+ *
+ * Deployment details — where the data lives, where mcpinner.php was installed, who may ask
+ * for a token — differ per host and do not belong in the repository. A config.php beside the
+ * entry file may define any of the constants below; whatever it leaves alone falls back to
+ * the environment, and then to the value here. The environment fallback exists for
+ * selftest.sh, which php-fpm never sees.
+ */
+if (is_file(__DIR__ . '/config.php')) {
+    require __DIR__ . '/config.php';
+}
 
 /** Where the relay keeps its database and key. Shared with browser.php. */
-define('RELAY_DIR', getenv('RELAY_DIR') ?: '/opt/rbmcp/var');
+defined('RELAY_DIR') || define('RELAY_DIR', getenv('RELAY_DIR') ?: __DIR__ . '/var');
 
 /** minimal-mcp's token hash. Absent at first, which is how the connector registers. */
-define('MCP_HASHFILE', RELAY_DIR . '/mcp-hash');
+defined('MCP_HASHFILE') || define('MCP_HASHFILE', RELAY_DIR . '/mcp-hash');
 
-/** minimal-mcp's engine, installed outside the document root. */
-define('MCPINNER', getenv('MCPINNER') ?: '/var/www/db/mcpinner.php');
+/** minimal-mcp's engine. */
+defined('MCPINNER') || define('MCPINNER', getenv('MCPINNER') ?: __DIR__ . '/mcpinner.php');
 
 /**
  * Who may request a token. Empty disables the check.
@@ -40,7 +50,7 @@ define('MCPINNER', getenv('MCPINNER') ?: '/var/www/db/mcpinner.php');
  * from claude.ai. It has to be relaxed while the server is being driven by curl from
  * somewhere else, so it is left to the environment rather than hard-coded either way.
  */
-define('MCP_TOKEN_ALLOW', getenv('MCP_TOKEN_ALLOW') === 'any' ? [] : ['160.79.104.0/21']);
+defined('MCP_TOKEN_ALLOW') || define('MCP_TOKEN_ALLOW', getenv('MCP_TOKEN_ALLOW') === 'any' ? [] : ['160.79.104.0/21']);
 
 const MCP_SERVER_NAME = 'remotebrowser';
 const MCP_SERVER_VERSION = '0.1.0';
@@ -53,7 +63,7 @@ const MCP_SERVER_VERSION = '0.1.0';
  * sleep() — so the real ceiling is whatever the web server allows a FastCGI response to take
  * (nginx defaults to 60s). This leaves room under that.
  */
-define('RELAY_WAIT_SECONDS', (int) (getenv('RELAY_WAIT_SECONDS') ?: 25));
+defined('RELAY_WAIT_SECONDS') || define('RELAY_WAIT_SECONDS', (int) (getenv('RELAY_WAIT_SECONDS') ?: 25));
 
 require __DIR__ . '/relay.php';
 

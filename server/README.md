@@ -67,9 +67,18 @@ for f in relay.php browser.php mcp.php schema.sql; do
 done
 ```
 
-`RELAY_DIR` and `MCPINNER` are defined at the top of each entry file and fall back to the
-environment, which is how `selftest.sh` runs the real files against a scratch directory
-instead of a copy that could drift from them.
+Deployment details that differ per host — where the data lives, who may ask for a token —
+go in a `config.php` beside the entry files. It is not in the repository, and whatever it
+does not define falls back to the environment (which is how `selftest.sh` runs the real files
+against a scratch directory) and then to the built-in default.
+
+```php
+<?php
+const RELAY_DIR = '/opt/rbmcp/var';
+const MCP_TOKEN_ALLOW = ['160.79.104.0/21'];   // [] to disable, e.g. while testing with curl
+```
+
+`var/` must be writable by the web server user.
 
 Serving it needs two aliases and nothing else — there are no rewrite rules, because
 `browser.php` routes on a field in the body rather than on the path:
