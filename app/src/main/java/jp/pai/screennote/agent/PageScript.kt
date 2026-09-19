@@ -89,7 +89,7 @@ object PageScript {
      * and can write anything it likes there, including text aimed at whoever reads it.
      */
     private fun withConsole(result: JSONObject, from: Long): JSONObject {
-        val lines = DebugLog.since(from, setOf("console"), MAX_CONSOLE_LINES)
+        val lines = DebugLog.since(from, setOf("console"), null, MAX_CONSOLE_LINES)
         if (lines.isEmpty()) return result
         return result
             .put("console", JSONArray(lines.map { it.message }))

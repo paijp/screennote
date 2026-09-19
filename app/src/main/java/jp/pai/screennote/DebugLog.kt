@@ -55,17 +55,24 @@ object DebugLog {
     fun mark(): Long = nextSeq
 
     /**
-     * Entries from [since] onwards, most recent [limit] of them.
+     * Entries from [from] onwards, optionally narrowed, most recent [limit] of them.
+     *
+     * The three filters are the ones a log is normally read with: which areas, what the line
+     * contains, and where to continue from. [match] is a plain case-insensitive substring
+     * rather than a regular expression — an expression composed by a model should not be able
+     * to make the phone chew through the buffer — which covers the cases that matter
+     * ("ERR_", "ssl", a host name) without that risk.
      *
      * Page-authored entries are not returned unless asked for by name: `console` is written by
      * whatever the page chooses to log, so it is both the bulkiest area and the one that can
      * be aimed at whoever reads it.
      */
     @Synchronized
-    fun since(since: Long, areas: Set<String>?, limit: Int): List<Entry> =
+    fun since(from: Long, areas: Set<String>?, match: String?, limit: Int): List<Entry> =
         entries.asSequence()
-            .filter { it.seq >= since }
+            .filter { it.seq >= from }
             .filter { if (areas == null) it.area != "console" else it.area in areas }
+            .filter { match.isNullOrEmpty() || it.message.contains(match, ignoreCase = true) }
             .toList()
             .takeLast(limit.coerceIn(1, 500))
 

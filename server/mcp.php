@@ -180,20 +180,24 @@ function rb_command(array $session, array $request)
     ] + rb_state($session);
 }
 
-function usertool_browser_log($agent_token, $areas = '', $limit = 100)
+function usertool_browser_log($agent_token, $areas = '', $match = '', $after = 0, $limit = 100)
 {
     if ($agent_token === null) {
         return "The browser's own log, which is where anything the page cannot tell you ends "
             . 'up: a navigation refused, a certificate rejected, a link handed to another app. '
-            . 'Read it when an action appears to have done nothing. Areas is a comma-separated '
-            . "filter over what 'areas_available' reports — nav, error, agent, relay and so on. "
-            . 'The log starts where the user handed the browser over, never earlier. The '
-            . "'console' area is excluded unless named, and is written by the page itself.";
+            . 'Read it when an action appears to have done nothing. Read it like a log file: '
+            . "'areas' is a comma-separated filter over what 'areas_available' reports (nav, "
+            . "error, agent, relay...), 'match' keeps only lines containing that text, and "
+            . "'after' continues from the 'next_after' of a previous call so a follow-up "
+            . 'returns only what is new. The log starts where the user handed the browser '
+            . "over, never earlier. The 'console' area is written by the page itself and is "
+            . 'excluded unless you name it.';
     }
-    $session = rb_session($agent_token);
-    return rb_command($session, [
+    return rb_command(rb_session($agent_token), [
         'op' => 'log',
         'areas' => (string) $areas,
+        'match' => (string) $match,
+        'after' => (int) $after,
         'limit' => (int) $limit,
     ]);
 }

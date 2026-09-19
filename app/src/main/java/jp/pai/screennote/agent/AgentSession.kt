@@ -121,9 +121,18 @@ class AgentSession(
         val areas = request.optString("areas")
             .split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
             .ifEmpty { null }
-        val entries = DebugLog.since(logFrom, areas, request.optInt("limit", 100))
+        // "after" continues a previous read. Reading a log usually means reading it more than
+        // once, and without a cursor every follow-up re-reads what has already been seen.
+        val after = request.optLong("after", 0L) + 1
+        val entries = DebugLog.since(
+            maxOf(logFrom, after),
+            areas,
+            request.optString("match").ifEmpty { null },
+            request.optInt("limit", 100),
+        )
         val result = JSONObject()
             .put("entries", JSONArray(entries.map { it.toString() }))
+            .put("next_after", entries.lastOrNull()?.seq ?: maxOf(logFrom, after) - 1)
             .put("areas_available", JSONArray(DebugLog.areas()))
         if (areas?.contains("console") == true) {
             result.put(

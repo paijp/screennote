@@ -50,11 +50,25 @@ ends up: a navigation refused, a certificate rejected, a link handed to another 
 it the only route to that is the user copying the log out by hand, which is the friction this
 whole arrangement exists to remove.
 
+It is read the way a log file is read: `areas` selects which kinds of line, `match` keeps
+only lines containing some text, and `after` continues from the previous call's `next_after`
+so a follow-up returns only what is new. The cursor matters more than it looks — a log is
+rarely read once, and without it every follow-up re-reads what has already been seen. `match`
+is a plain case-insensitive substring rather than an expression, so a pattern composed by a
+model cannot make the phone chew through the buffer.
+
 Two limits are part of the design rather than tidiness.
 
 **It starts at the handover.** The log holds every address visited since the app started.
 Handing over one page is not handing over where the user has been, so the session records
 where the log stood when agent control went on and never reads back past it.
+
+This is not a wall, and should not be described as one: an agent can inject `history.back()`
+and walk the same pages. What it does remove is the *silent, bulk* route — `back()` shows up
+in the Picture-in-Picture window, costs the current page's state, and yields one page per
+round trip, where the log would hand over every address at once with query strings attached.
+The real boundary on where an agent can go is the domain permission model; this is a cheap
+default that matches what the user thinks they handed over.
 
 **`console` is the page's own words.** It is excluded unless asked for by name, and labelled
 when returned. A page writes its console and can write anything there, including text aimed at
