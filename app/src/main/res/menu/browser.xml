@@ -11,6 +11,10 @@
         android:checkable="true"
         app:showAsAction="never" />
     <item
+        android:id="@+id/action_relay_url"
+        android:title="@string/action_relay_url"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/action_dom_probe"
         android:title="@string/action_dom_probe"
         android:checkable="true"

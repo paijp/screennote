@@ -11,6 +11,7 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -22,6 +23,7 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.view.autofill.AutofillManager
+import android.widget.EditText
 import android.webkit.ConsoleMessage
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
@@ -36,14 +38,20 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.lifecycle.lifecycleScope
 import jp.pai.screennote.BuildConfig
 import jp.pai.screennote.DebugLog
 import jp.pai.screennote.Palette
 import jp.pai.screennote.Prefs
 import jp.pai.screennote.R
+import jp.pai.screennote.agent.AgentSession
+import jp.pai.screennote.agent.Relay
 import jp.pai.screennote.databinding.ActivityBrowserBinding
 import jp.pai.screennote.pdf.PdfActivity
 import jp.pai.screennote.update.UpdateFlow
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class BrowserActivity : AppCompatActivity() {
 
@@ -96,6 +104,9 @@ class BrowserActivity : AppCompatActivity() {
             probeHandler.postDelayed(this, DomProbe.INTERVAL_MS)
         }
     }
+
+    /** Live only while agent control is on; neither of its tokens is ever persisted. */
+    private var agentSession: AgentSession? = null
 
     private val pipSupported: Boolean
         get() = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
@@ -319,20 +330,121 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun toggleAgentControl() {
-        if (!prefs.agentControl && !pipSupported) {
+        if (prefs.agentControl) {
+            stopAgentControl(R.string.action_agent_control_off)
+            return
+        }
+        if (!pipSupported) {
             Toast.makeText(this, R.string.agent_control_unsupported, Toast.LENGTH_LONG).show()
             return
         }
-        prefs.agentControl = !prefs.agentControl
-        applyAgentControlIndicator()
-        DebugLog.log("agent", "control=${prefs.agentControl}")
-        Toast.makeText(
-            this,
-            if (prefs.agentControl) R.string.action_agent_control_on
-            else R.string.action_agent_control_off,
-            Toast.LENGTH_SHORT,
-        ).show()
+        val relayUrl = prefs.relayUrl
+        if (relayUrl.isNullOrBlank()) {
+            Toast.makeText(this, R.string.relay_url_needed, Toast.LENGTH_LONG).show()
+            showRelayUrlDialog()
+            return
+        }
+        startAgentControl(relayUrl)
     }
+
+    /**
+     * Pair with the relay, then show the user what to paste.
+     *
+     * Control only goes on once the pairing has succeeded. Flipping the switch first would
+     * leave the app claiming to be under agent control while nothing was listening, and the
+     * indicator is meant to be trustworthy.
+     */
+    private fun startAgentControl(relayUrl: String) {
+        val relay = Relay(relayUrl)
+        lifecycleScope.launch {
+            val pairing = try {
+                relay.pair(deviceId())
+            } catch (t: Throwable) {
+                DebugLog.log("agent", "pair failed: $t")
+                Toast.makeText(
+                    this@BrowserActivity,
+                    getString(R.string.relay_pair_failed, t.message ?: ""),
+                    Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+
+            val session = AgentSession(relay, pairing, binding.webView) { reason ->
+                // The relay stopped recognising us. Only a new pairing can fix that, and only
+                // the user can start one, so say so rather than retrying into a wall.
+                stopAgentControl(
+                    if (reason == "session_expired") R.string.agent_session_expired
+                    else R.string.action_agent_control_off
+                )
+            }
+            agentSession = session
+            prefs.agentControl = true
+            applyAgentControlIndicator()
+            DebugLog.log("agent", "control=true session=${pairing.sessionId}")
+
+            session.start(lifecycleScope) {
+                binding.webView.url to binding.webView.title
+            }
+            showAgentTokenDialog(session)
+        }
+    }
+
+    private fun stopAgentControl(messageRes: Int) {
+        agentSession?.stop(lifecycleScope)
+        agentSession = null
+        prefs.agentControl = false
+        applyAgentControlIndicator()
+        DebugLog.log("agent", "control=false")
+        Toast.makeText(this, messageRes, Toast.LENGTH_LONG).show()
+    }
+
+    /**
+     * What the user hands to the conversation.
+     *
+     * The connector's URL is included because a name can be mistyped or duplicated and the
+     * model has no way to tell which server was meant; the URL it can check against the list
+     * it already has. The text ends waiting for an instruction so the user can simply carry
+     * on typing after pasting it.
+     */
+    private fun showAgentTokenDialog(session: AgentSession) {
+        val text = getString(R.string.agent_token_paste, session.mcpEndpoint, session.agentToken)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.agent_token_title)
+            .setMessage(text)
+            .setPositiveButton(R.string.agent_token_copy) { _, _ ->
+                getSystemService(ClipboardManager::class.java)
+                    ?.setPrimaryClip(ClipData.newPlainText("screennote agent", text))
+                Toast.makeText(this, R.string.agent_token_copied, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.close, null)
+            .show()
+    }
+
+    private fun showRelayUrlDialog() {
+        val input = EditText(this).apply {
+            setText(prefs.relayUrl ?: "")
+            hint = getString(R.string.relay_url_hint)
+            setSingleLine()
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.action_relay_url)
+            .setMessage(R.string.relay_url_message)
+            .setView(input)
+            .setPositiveButton(R.string.save) { _, _ ->
+                prefs.relayUrl = input.text.toString().trim().ifEmpty { null }
+                DebugLog.log("agent", "relay=${prefs.relayUrl}")
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * A stable name for this device, so the relay's records say which phone paired.
+     *
+     * Recorded, never trusted: it is a note for whoever reads the server's state, not a
+     * credential, and nothing is decided by it.
+     */
+    private fun deviceId(): String = "${Build.MANUFACTURER} ${Build.MODEL}"
 
     /**
      * Called as the user leaves for another app. Note that on this platform version the
@@ -491,8 +603,13 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean = when (item.itemId) {
         R.id.action_agent_control -> {
+            // Not ticked here: turning control on has to reach the relay first, and the tick
+            // should mean "paired", not "asked for". onPrepareOptionsMenu reads the real state.
             toggleAgentControl()
-            item.isChecked = prefs.agentControl
+            true
+        }
+        R.id.action_relay_url -> {
+            showRelayUrlDialog()
             true
         }
         R.id.action_dom_probe -> {
@@ -601,6 +718,13 @@ class BrowserActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         probeHandler.removeCallbacks(probeTick)
+        // lifecycleScope is already cancelled here, so the polling loop has stopped on its
+        // own. The farewell still goes out, on a scope that outlives this activity, so the
+        // relay is not left holding a session nothing will ever answer for.
+        agentSession?.let { session ->
+            agentSession = null
+            session.stop(CoroutineScope(Dispatchers.IO))
+        }
         binding.webView.destroy()
         super.onDestroy()
     }

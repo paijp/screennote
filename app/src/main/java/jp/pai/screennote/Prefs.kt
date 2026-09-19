@@ -30,6 +30,17 @@ class Prefs(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_AGENT_CONTROL, value).apply()
 
     /**
+     * The relay's base URL, e.g. `https://example.com/rbmcp`, or null before it is set.
+     *
+     * Only the address is kept. The tokens a pairing produces are deliberately not: the
+     * browser token must not outlive the moment the user handed the page over, and the agent
+     * token has already gone wherever the user pasted it.
+     */
+    var relayUrl: String?
+        get() = prefs.getString(KEY_RELAY_URL, null)
+        set(value) = prefs.edit().putString(KEY_RELAY_URL, value).apply()
+
+    /**
      * When an APK was last handed to the package installer, or 0.
      *
      * The installer reads the file only once the user has worked through its own screens,
@@ -54,5 +65,6 @@ class Prefs(context: Context) {
         const val KEY_RENDER_MODE = "render_mode"
         const val KEY_AGENT_CONTROL = "agent_control"
         const val KEY_PENDING_INSTALL_AT = "pending_install_at"
+        const val KEY_RELAY_URL = "relay_url"
     }
 }
