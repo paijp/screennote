@@ -46,6 +46,7 @@
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="action_debug_log">Debug log</string>
+    <string name="debug_log_all">All</string>
     <string name="debug_log_copy">Copy</string>
     <string name="debug_log_clear">Clear</string>
     <string name="debug_log_copied">Log copied to clipboard</string>

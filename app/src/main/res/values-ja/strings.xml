@@ -43,6 +43,7 @@
     <string name="theme_light">ライト</string>
     <string name="theme_dark">ダーク</string>
     <string name="action_debug_log">デバッグログ</string>
+    <string name="debug_log_all">すべて</string>
     <string name="debug_log_copy">コピー</string>
     <string name="debug_log_clear">消去</string>
     <string name="debug_log_copied">ログをクリップボードにコピーしました</string>

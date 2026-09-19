@@ -41,6 +41,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
 import jp.pai.screennote.BuildConfig
 import jp.pai.screennote.DebugLog
+import jp.pai.screennote.DebugLogDialog
 import jp.pai.screennote.Palette
 import jp.pai.screennote.Prefs
 import jp.pai.screennote.R
@@ -706,18 +707,7 @@ class BrowserActivity : AppCompatActivity() {
     }
 
     private fun showDebugLog() {
-        val text = DebugLog.snapshot()
-        AlertDialog.Builder(this)
-            .setTitle(R.string.action_debug_log)
-            .setMessage(text)
-            .setPositiveButton(R.string.debug_log_copy) { _, _ ->
-                getSystemService(ClipboardManager::class.java)
-                    ?.setPrimaryClip(ClipData.newPlainText("screennote log", text))
-                Toast.makeText(this, R.string.debug_log_copied, Toast.LENGTH_SHORT).show()
-            }
-            .setNeutralButton(R.string.debug_log_clear) { _, _ -> DebugLog.clear() }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
+        DebugLogDialog.show(this)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
