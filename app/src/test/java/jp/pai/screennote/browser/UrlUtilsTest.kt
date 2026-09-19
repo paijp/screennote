@@ -2,6 +2,7 @@ package jp.pai.screennote.browser
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,5 +37,39 @@ class UrlUtilsTest {
         assertTrue(UrlUtils.isPdfMimeType("application/pdf; charset=binary"))
         assertFalse(UrlUtils.isPdfMimeType("text/html"))
         assertFalse(UrlUtils.isPdfMimeType(null))
+    }
+
+    @Test
+    fun `host is read without the scheme, port, credentials or path`() {
+        assertEquals("www.digikey.jp", UrlUtils.hostOf("https://www.digikey.jp/products/en"))
+        assertEquals("example.com", UrlUtils.hostOf("https://example.com:8443/a?b=c"))
+        assertEquals("example.com", UrlUtils.hostOf("https://user:pw@example.com/"))
+        assertEquals("example.com", UrlUtils.hostOf("https://EXAMPLE.com"))
+    }
+
+    @Test
+    fun `a URL with no scheme has no host to read`() {
+        assertNull(UrlUtils.hostOf("example.com/page"))
+        assertNull(UrlUtils.hostOf(""))
+        assertNull(UrlUtils.hostOf(null))
+    }
+
+    @Test
+    fun `a page is told apart from what it loads`() {
+        // The case this exists for: one third-party certificate the platform does not know
+        // must not be reported as the page itself having failed.
+        assertFalse(
+            UrlUtils.sameHost("https://www.digikey.com/x.png", "https://www.digikey.jp/")
+        )
+        assertTrue(
+            UrlUtils.sameHost("https://www.digikey.jp/x.png", "https://www.digikey.jp/products")
+        )
+    }
+
+    @Test
+    fun `an unknown host matches nothing, including another unknown one`() {
+        assertFalse(UrlUtils.sameHost(null, "https://example.com/"))
+        assertFalse(UrlUtils.sameHost("https://example.com/", null))
+        assertFalse(UrlUtils.sameHost("not a url", "also not a url"))
     }
 }

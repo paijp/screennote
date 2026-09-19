@@ -105,6 +105,14 @@ class BrowserActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * The address of the page itself, as opposed to anything it loads.
+     *
+     * Kept because a certificate failure arrives without saying which frame it came from; see
+     * onReceivedSslError.
+     */
+    private var mainFrameUrl: String? = null
+
     /** Live only while agent control is on; neither of its tokens is ever persisted. */
     private var agentSession: AgentSession? = null
 
@@ -557,6 +565,7 @@ class BrowserActivity : AppCompatActivity() {
             return
         }
         DebugLog.log("nav", "load $url")
+        mainFrameUrl = url
         clearLoadError()
         binding.webView.loadUrl(url)
     }
@@ -743,6 +752,7 @@ class BrowserActivity : AppCompatActivity() {
                     true
                 }
                 else -> {
+                    if (request.isForMainFrame) mainFrameUrl = url
                     DebugLog.log("nav", "navigate $url main=${request.isForMainFrame}")
                     false
                 }
@@ -753,6 +763,7 @@ class BrowserActivity : AppCompatActivity() {
             // Leaving a page ends any form the user was filling in. Committing here is what
             // makes the system's "save password?" prompt appear for WebView content.
             runCatching { getSystemService(AutofillManager::class.java)?.commit() }
+            mainFrameUrl = url
             DebugLog.log("nav", "started $url")
             clearLoadError()
             binding.urlBar.setText(url)
@@ -797,13 +808,24 @@ class BrowserActivity : AppCompatActivity() {
             }
         }
 
+        /**
+         * Unlike the other two error callbacks, this one is handed no request, so there is
+         * nothing to ask whether the failure belongs to the page or to something the page
+         * loaded — and it fires for both. A page typically pulls in a dozen other hosts, so
+         * taking every certificate failure for the page's own meant one unrecognised
+         * third-party CA covered a perfectly good page with an error.
+         *
+         * The host is the best signal available. Treating a same-host failure as the page's
+         * own errs towards explaining a blank page, which is what this error view is for.
+         */
         override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
             val reason = sslErrorName(error.primaryError)
-            DebugLog.log("error", "ssl $reason url=${error.url}")
-            DebugLog.log("error", "ssl cert=${error.certificate}")
-            // Never proceed past a certificate the platform rejected.
+            val forPage = UrlUtils.sameHost(error.url, mainFrameUrl ?: view.url)
+            DebugLog.log("error", "ssl $reason page=$forPage url=${error.url}")
+            if (forPage) DebugLog.log("error", "ssl cert=${error.certificate}")
+            // Never proceed past a certificate the platform rejected, whichever frame it is for.
             handler.cancel()
-            showLoadError("SSL: $reason", error.url)
+            if (forPage) showLoadError("SSL: $reason", error.url)
         }
 
         private fun sslErrorName(code: Int): String = when (code) {

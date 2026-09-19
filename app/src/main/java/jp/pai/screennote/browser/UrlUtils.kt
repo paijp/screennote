@@ -39,6 +39,28 @@ object UrlUtils {
     fun isPdfMimeType(mimeType: String?): Boolean =
         mimeType?.substringBefore(';')?.trim()?.equals("application/pdf", ignoreCase = true) == true
 
+    /**
+     * The host part of a URL, or null when there is not one to read.
+     *
+     * Used to tell the page apart from what it loads. WebView reports a certificate failure
+     * without saying which frame it belongs to, and a page routinely pulls in a dozen other
+     * hosts — so without this a single bad third-party certificate looks exactly like the page
+     * itself failing.
+     */
+    fun hostOf(url: String?): String? {
+        if (url.isNullOrEmpty()) return null
+        val withoutScheme = SCHEME.find(url)?.let { url.substring(it.value.length) } ?: return null
+        val authority = withoutScheme.substringBefore('/').substringBefore('?').substringBefore('#')
+        val host = authority.substringAfterLast('@').substringBefore(':')
+        return host.lowercase().ifEmpty { null }
+    }
+
+    /** Whether two URLs are served by the same host. Null hosts never match. */
+    fun sameHost(a: String?, b: String?): Boolean {
+        val hostA = hostOf(a) ?: return false
+        return hostA == hostOf(b)
+    }
+
     private fun pathOf(url: String): String {
         val withoutScheme = SCHEME.find(url)?.let { url.substring(it.value.length) } ?: url
         val authorityStripped = withoutScheme.substringAfter('/', missingDelimiterValue = "")
