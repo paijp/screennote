@@ -319,6 +319,7 @@ FPM の子プロセスを 1 つ占有するが、`pm.max_children` が 50 ある
 | 軸 | 選択 | 理由 |
 | --- | --- | --- |
 | A. 新規タブ | **A1（何もしない）** | ただし「遷移しなかった」ことを応答に明示し、DOM 抽出に `href` を含める。この 2 つだけで Claude は自力で `navigate` に切り替える |
+| （追加） | **`browser_navigate` / `browser_back` をネイティブで先に** | eval だけでは CSP `sandbox` のページから戻れない（上記）。H2 の「最小 2 ツール」に対する唯一の例外 |
 | B. 可視性 | **B1（1 枚）** | ただしワイヤフォーマットは最初からタブ対応にする（`"tab": 1` と `"tabs": [...]` を常に含め、`tab` を optional 引数として定義）。タブ実装が入った日にツール定義が変わらない |
 | C. 到達性 | **C3 の簡易版** | 現在のタブのドメインのみ。新ドメインは全画面で確認 |
 | D. Cookie | **D1（共有）** | D3 は Multi-Profile の可否を実測してから |
@@ -396,6 +397,13 @@ shadow DOM も再帰的に走査する（DigiKey の Turnstile は shadow root �
 拾った。`main` の `innerText` を読んだら一発だった。**`browser_read` は、リンクの列挙より
 先に本文領域の抽出を持つべき。**
 
+### 手で通した Cloudflare は、あとから効く
+
+DigiKey に続き aerodiode.com でも、**ユーザーが一度タップで通したあとは、エージェントが
+そのまま読める**ことを確認した（別セッション・別トークンでも Cookie が生きていた）。
+「人が認証を通してから制御を渡す」という元々の運用が、そのまま答えになっている。
+`browser_request_user` はこのためにある。
+
 ### ボット検査はサイトによる
 
 | | |
@@ -410,6 +418,37 @@ shadow DOM も再帰的に走査する（DigiKey の Turnstile は shadow root �
 なお DigiKey で止まったときの UA は**デスクトップ表示による偽装**で、「Linux デスクトップの
 Chrome」を名乗りながら中身は Android WebView という矛盾した状態だった。素の WebView より
 不審に見える可能性がある。
+
+### JS を止めるページに入ると、そこで終わり
+
+**いちばん重い実測結果。** `raw.githubusercontent.com` を開いたところ、以降どの
+`browser_eval` も 20 秒待って `script_timeout` を返すようになった。
+
+```
+Blocked script execution in '…/rl78.py' because the document's frame is
+sandboxed and the 'allow-scripts' permission is not set.
+```
+
+GitHub の raw は `Content-Security-Policy: sandbox` を返す。sandbox はページの JS
+コンテキストごと無効化するので、**`evaluateJavascript` も動かない。** そして今のツールは
+`browser_eval` しかないため、「JS で `location.href` を書き換えて逃げる」という脱出路も
+同時に失われる。**ユーザーが手で「戻る」を押すまで、エージェントからは何もできない。**
+
+CSP はごく普通のヘッダで、CDN・ドキュメント・ファイル配信でよく使われる。つまりこれは
+珍しい事故ではなく、**リンクを辿っていれば必ず踏む。**
+
+要件は 3 つ:
+
+1. **`browser_navigate` は JS ではなく Kotlin 側の `loadUrl()` で実装する。** ページの
+   JS が止まっていても効く、唯一の経路。`browser_back` / `browser_reload` も同じ理由で
+   ネイティブに要る。**「eval + read の 2 本から始める」という H2 の方針で、初めて見つかった
+   実害がこれ。** eval だけでは戻れない場所がある
+2. **スクリプトの実行待ちとポーリングを切り離す。** タイムアウトの 20 秒間、`last_seen_at`
+   が更新されず `browser_status` が `connected: false` を返した。生きているのに死んで
+   見える
+3. **JS が無効なページを、タイムアウトではなく明示的に報告する。** 20 秒待って
+   `script_timeout` では原因が分からない。console に `Blocked script execution` が
+   出ているので、それを見て `javascript_disabled` を返せる
 
 ### デスクトップ表示の効き方は一定でない
 
@@ -443,6 +482,8 @@ Chrome」を名乗りながら中身は Android WebView という矛盾した状
 6. **`window.opener` が制御境界を跨げてしまうか**
 7. **`WebStorage.deleteOrigin()` が localStorage / IndexedDB に実際に効くか**
 8. ~~ポーリング往復の実測レイテンシ~~ — **2〜3 秒**（ポーリング 1 秒 + settle 待ち + 通信）
+9. ~~CSP `sandbox` のページで `evaluateJavascript` が動くか~~ — **動かない**（上記）。
+   ネイティブのナビゲーションが無いと詰む
 
 ---
 
