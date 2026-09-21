@@ -236,6 +236,7 @@ class BrowserActivity : AppCompatActivity() {
         // Credentials are delegated to the system autofill service (Google Password Manager,
         // Bitwarden, ...). Screennote never reads or stores passwords itself.
         binding.webView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_YES
+        reportAutofillState()
 
         binding.webView.webViewClient = ScreennoteWebViewClient()
         binding.webView.webChromeClient = object : WebChromeClient() {
@@ -728,6 +729,43 @@ class BrowserActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    /**
+     * End the autofill session, so the system can offer to save what was just typed.
+     *
+     * Leaving a page ends any form the user was filling in, and this call is what makes the
+     * "save password?" prompt appear for WebView content — the framework has no other way to
+     * know a form was submitted inside a WebView.
+     */
+    private fun commitAutofill(reason: String) {
+        runCatching {
+            getSystemService(AutofillManager::class.java)?.let {
+                it.commit()
+                DebugLog.log("autofill", "commit $reason enabled=${it.isEnabled}")
+            }
+        }.onFailure { DebugLog.log("autofill", "commit $reason failed: $it") }
+    }
+
+    /**
+     * Say once, at startup, whether saving a password can work at all.
+     *
+     * Delegating credentials means the app is one of three things that have to be right, and
+     * the other two are outside it: the device has to support autofill, and the user has to
+     * have chosen a service (it is "None" by default on many devices). Neither produces any
+     * symptom beyond the prompt never appearing, which looks exactly like a bug here.
+     */
+    private fun reportAutofillState() {
+        val manager = getSystemService(AutofillManager::class.java)
+        if (manager == null) {
+            DebugLog.log("autofill", "no AutofillManager on this device")
+            return
+        }
+        DebugLog.log(
+            "autofill",
+            "supported=${manager.isAutofillSupported} enabled=${manager.isEnabled}" +
+                if (!manager.isEnabled) " (no autofill service selected in system settings)" else "",
+        )
+    }
+
     private inner class ScreennoteWebViewClient : WebViewClient() {
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -750,13 +788,21 @@ class BrowserActivity : AppCompatActivity() {
         }
 
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-            // Leaving a page ends any form the user was filling in. Committing here is what
-            // makes the system's "save password?" prompt appear for WebView content.
-            runCatching { getSystemService(AutofillManager::class.java)?.commit() }
+            commitAutofill("page")
             mainFrameUrl = url
             DebugLog.log("nav", "started $url")
             clearLoadError()
             binding.urlBar.setText(url)
+        }
+
+        /**
+         * Also fires for `history.pushState`, which is how a great many login forms now
+         * "navigate" after signing in: no page load, so [onPageStarted] never runs and the
+         * form the user just filled in is never committed. Without this the save prompt
+         * simply never appears on those sites.
+         */
+        override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+            commitAutofill("history")
         }
 
         override fun onPageFinished(view: WebView, url: String) {
