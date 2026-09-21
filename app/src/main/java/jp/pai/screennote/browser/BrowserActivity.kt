@@ -391,6 +391,9 @@ class BrowserActivity : AppCompatActivity() {
             prefs.agentControl = true
             applyAgentControlIndicator()
             DebugLog.log("agent", "control=true session=${pairing.sessionId}")
+            // The startup report is behind the handover mark, so an agent cannot see it.
+            // State that does not change often is exactly what is worth repeating here.
+            reportAutofillState()
 
             session.start(lifecycleScope) {
                 binding.webView.url to binding.webView.title
