@@ -139,6 +139,53 @@ function usertool_browser_eval($agent_token, $js, $settle = true)
     ]);
 }
 
+function usertool_browser_navigate($agent_token, $url)
+{
+    if ($agent_token === null) {
+        return 'Go to a page, and answer with the page arrived at: {url, title, can_go_back, '
+            . 'can_go_forward, loaded}. Use this rather than setting location from browser_eval. '
+            . 'A page can ignore an assignment to location, a page served with a sandbox '
+            . "Content-Security-Policy cannot run injected script at all, and a navigating script "
+            . 'destroys the result it was going to return. This goes through the browser itself, '
+            . 'so none of that applies. A bare host or a search phrase is accepted, the same as '
+            . 'typing in the address bar. A URL ending in .pdf opens the separate PDF viewer '
+            . "instead, which the answer says: the browser is then no longer the visible screen.";
+    }
+    return rb_command(rb_session($agent_token), [
+        'op' => 'navigate',
+        'url' => (string) $url,
+    ]);
+}
+
+function usertool_browser_back($agent_token)
+{
+    if ($agent_token === null) {
+        return 'Go back one page, answering with the page arrived at. Reports not_possible when '
+            . 'there is no history to go back to, which browser_navigate also tells you in '
+            . "advance through 'can_go_back'.";
+    }
+    return rb_command(rb_session($agent_token), ['op' => 'back']);
+}
+
+function usertool_browser_forward($agent_token)
+{
+    if ($agent_token === null) {
+        return 'Go forward one page, answering with the page arrived at. Reports not_possible '
+            . 'when nothing was gone back from.';
+    }
+    return rb_command(rb_session($agent_token), ['op' => 'forward']);
+}
+
+function usertool_browser_reload($agent_token)
+{
+    if ($agent_token === null) {
+        return 'Reload the current page, answering with its state once the load finishes. Useful '
+            . 'after the user has done something on the page by hand, such as passing a bot '
+            . 'check.';
+    }
+    return rb_command(rb_session($agent_token), ['op' => 'reload']);
+}
+
 /**
  * Send a command and wait for the browser to answer it.
  *

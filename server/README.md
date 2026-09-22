@@ -19,6 +19,21 @@ are easier to keep honest when they change together.
 | `schema.sql` | Applied on every connection; safe to re-run. |
 | `selftest.sh` | Smoke test against PHP's built-in server. Touches nothing outside `/tmp`. |
 
+## Navigation does not go through the page
+
+`browser_navigate`, `browser_back`, `browser_forward` and `browser_reload` are separate tools
+rather than something to write with `browser_eval`, because assigning to `location` is not a way
+to navigate — it is a way to *ask the current page* to navigate, and two ordinary pages already
+refused. A document served with `Content-Security-Policy: sandbox` has no JavaScript context, so
+nothing injected runs, including the escape route; and a navigating script destroys the result it
+was going to return, because that value lives on the page being replaced. Going through the
+browser is immune to both, and each of these answers with the state it *arrived* at, so a caller
+never has to race the load it just started.
+
+A URL that resolves to a PDF opens the built-in viewer, which is a separate screen: the answer
+says so rather than waiting for a page load that will not happen. That is also how a caller learns
+the browser is no longer what the user is looking at.
+
 ## Two tokens, and why
 
 Turning on agent control mints a fresh pair and retires every earlier one, so at most one

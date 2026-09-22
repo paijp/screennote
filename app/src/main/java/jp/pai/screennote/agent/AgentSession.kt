@@ -2,6 +2,7 @@ package jp.pai.screennote.agent
 
 import android.webkit.WebView
 import jp.pai.screennote.DebugLog
+import jp.pai.screennote.browser.Navigation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -26,6 +27,7 @@ class AgentSession(
     private val relay: Relay,
     private val pairing: Pairing,
     private val webView: WebView,
+    private val navigation: Navigation,
     private val onEnded: (String) -> Unit,
 ) {
 
@@ -102,6 +104,12 @@ class AgentSession(
                 command.request.optBoolean("settle", true),
             )
             "log" -> readLog(command.request)
+            // Navigation is deliberately not JavaScript: a page can ignore an assignment to
+            // `location`, and a sandboxed one cannot run the script at all. See [Navigation].
+            "navigate" -> navigation.navigate(command.request.optString("url"))
+            "back" -> navigation.back()
+            "forward" -> navigation.forward()
+            "reload" -> navigation.reload()
             else -> JSONObject()
                 .put("error", "unknown_op")
                 .put("message", "This browser does not know how to do '$op'.")

@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Rational
+import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -96,6 +97,17 @@ class BrowserActivity : AppCompatActivity() {
      * gets the wrong page. The pinned size is held until the window has caught up.
      */
     private var leavingPip = false
+
+    /**
+     * Moving between pages, shared by the keyboard and by agent control.
+     *
+     * Both want the same four things, and neither can get them from injected JavaScript: a page
+     * is free to ignore an assignment to `location`, and a sandboxed one cannot run the script at
+     * all. Built once here so the two front ends cannot drift apart.
+     */
+    private val navigation: Navigation by lazy {
+        Navigation(binding.webView) { url -> loadUrl(url) }
+    }
 
     private val probeHandler = Handler(Looper.getMainLooper())
     private var probing = false
@@ -379,7 +391,7 @@ class BrowserActivity : AppCompatActivity() {
                 return@launch
             }
 
-            val session = AgentSession(relay, pairing, binding.webView) { reason ->
+            val session = AgentSession(relay, pairing, binding.webView, navigation) { reason ->
                 // The relay stopped recognising us. Only a new pairing can fix that, and only
                 // the user can start one, so say so rather than retrying into a wall.
                 stopAgentControl(
@@ -562,6 +574,51 @@ class BrowserActivity : AppCompatActivity() {
             if (probing) R.string.dom_probe_on else R.string.dom_probe_off,
             Toast.LENGTH_SHORT,
         ).show()
+    }
+
+    /**
+     * Keyboard shortcuts, taken before the focused view sees the key.
+     *
+     * `onKeyDown` would not do: the WebView and the address bar both consume keys while they
+     * have focus, and Ctrl+L is worth least when the cursor is already somewhere else.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
+        val shortcut = Shortcuts.of(
+            event.keyCode,
+            ctrl = event.isCtrlPressed,
+            alt = event.isAltPressed,
+        ) ?: return super.dispatchKeyEvent(event)
+
+        DebugLog.log("key", "$shortcut")
+        when (shortcut) {
+            Shortcut.FOCUS_URL_BAR -> focusUrlBar()
+            Shortcut.RELOAD -> binding.webView.reload()
+            Shortcut.BACK -> if (binding.webView.canGoBack()) binding.webView.goBack()
+            Shortcut.FORWARD -> if (binding.webView.canGoForward()) binding.webView.goForward()
+            Shortcut.CANCEL -> cancelCurrent()
+        }
+        return true
+    }
+
+    private fun focusUrlBar() {
+        binding.urlBar.requestFocus()
+        binding.urlBar.selectAll()
+    }
+
+    /**
+     * Escape means "undo what I am in the middle of", which is two different things depending on
+     * where the cursor is: abandoning a half-typed address, or stopping a page that is loading.
+     */
+    private fun cancelCurrent() {
+        if (binding.urlBar.hasFocus()) {
+            binding.urlBar.setText(binding.webView.url ?: "")
+            binding.urlBar.clearFocus()
+            getSystemService(InputMethodManager::class.java)
+                ?.hideSoftInputFromWindow(binding.urlBar.windowToken, 0)
+        } else {
+            binding.webView.stopLoading()
+        }
     }
 
     private fun loadUrl(url: String) {
@@ -812,6 +869,7 @@ class BrowserActivity : AppCompatActivity() {
             DebugLog.log("nav", "finished $url")
             binding.urlBar.setText(url)
             binding.progress.visibility = View.INVISIBLE
+            navigation.onPageFinished(url)
         }
 
         override fun onReceivedError(
