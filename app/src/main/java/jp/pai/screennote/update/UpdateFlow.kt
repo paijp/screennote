@@ -23,7 +23,11 @@ object UpdateFlow {
         activity.lifecycleScope.launch {
             val release = try {
                 UpdateChecker.fetchLatest().also {
-                    DebugLog.log("update", "latest=${it?.versionName} current=${BuildConfig.VERSION_NAME}")
+                    DebugLog.log(
+                        "update",
+                        "latest=${it?.versionName} current=${BuildConfig.VERSION_NAME}" +
+                            " published=${it?.publishedAt}",
+                    )
                 }
             } catch (t: Throwable) {
                 DebugLog.log("update", "check failed: $t")
@@ -35,7 +39,18 @@ object UpdateFlow {
 
             if (release == null || !UpdateChecker.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
                 if (!silent) {
-                    toast(activity, activity.getString(R.string.update_none, BuildConfig.VERSION_NAME))
+                    // Not "there is nothing newer" — only "the manifest read here is not newer".
+                    // GitHub serves it through a CDN with a five-minute life that a query string
+                    // does not shorten, so right after a release this is a stale answer rather
+                    // than a wrong one. Saying which manifest was read is the difference.
+                    toast(
+                        activity,
+                        activity.getString(
+                            R.string.update_none,
+                            BuildConfig.VERSION_NAME,
+                            release?.publishedAt ?: "?",
+                        ),
+                    )
                 }
                 return@launch
             }

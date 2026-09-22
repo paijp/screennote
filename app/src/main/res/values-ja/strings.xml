@@ -7,7 +7,7 @@
     <string name="pdf_error">この PDF を開けませんでした: %1$s</string>
     <string name="update_available_title">アップデートがあります</string>
     <string name="update_available_message">Screennote %1$s が利用できます（現在 %2$s）。\n\nダウンロードしてインストールしますか？</string>
-    <string name="update_none">Screennote は最新です（%1$s）。</string>
+    <string name="update_none">Screennote は最新です（%1$s）。読み込んだリリース一覧: %2$s — GitHub 側に 5 分のキャッシュがあるため、直前のリリースは数分後に現れます。</string>
     <string name="update_check_failed">アップデートの確認に失敗しました: %1$s</string>
     <string name="update_downloading">アップデートをダウンロードしています…</string>
     <string name="update_download_failed">アップデートのダウンロードに失敗しました: %1$s</string>

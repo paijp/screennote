@@ -140,3 +140,15 @@ Worth knowing before chasing this again:
   hold the signer certificate, and comparing their SHA-256 settles "is this the same key?" in
   one step. Note that `keytool -printcert -jarfile` does not work here — with minSdk 27 the
   build omits the v1 JAR signature entirely, so there is nothing for it to read.
+
+## The update does not appear for a few minutes
+
+The in-app updater reads `release/latest.json` from `raw.githubusercontent.com`, which GitHub
+serves with `Cache-Control: max-age=300` through a CDN that **ignores the query string** when
+deciding what is cached — the same ETag and `x-cache: HIT` come back for a URL carrying a unique
+timestamp, so a cache-buster does nothing. For up to five minutes after the release workflow
+finishes, the app therefore reads the manifest from before it and correctly reports that it is up
+to date.
+
+Nothing is wrong when this happens; wait and check again. The "up to date" message carries the
+manifest's own `publishedAt` so the two cases can be told apart.

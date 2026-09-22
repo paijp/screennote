@@ -14,6 +14,8 @@ data class Release(
     val apkUrl: String,
     /** Lowercase hex SHA-256 of the APK, or null when the manifest omits it. */
     val sha256: String?,
+    /** When the release workflow wrote this manifest, or null when it did not say. */
+    val publishedAt: String?,
 )
 
 /**
@@ -22,6 +24,13 @@ data class Release(
  *
  * This is preferred over the Releases API because it needs no token, is not subject to the API's
  * per-IP rate limit, and lets the manifest carry a checksum for the APK.
+ *
+ * The cost is a delay. GitHub serves this with `max-age=300` through a CDN that **ignores the
+ * query string** when deciding what is cached — measured: the same ETag and `x-cache: HIT` come
+ * back for a URL with a unique timestamp on it. So for up to five minutes after a release, this
+ * still answers with the version before it, and there is nothing a client can do about that. The
+ * manifest's own `publishedAt` is carried through so a caller can say which manifest it read
+ * rather than claiming there is nothing newer.
  */
 object UpdateChecker {
 
@@ -34,9 +43,7 @@ object UpdateChecker {
 
     /** Returns null when nothing has been published to `release/` yet. */
     suspend fun fetchLatest(): Release? = withContext(Dispatchers.IO) {
-        // raw.githubusercontent.com is CDN-cached for a few minutes; the timestamp defeats a
-        // stale edge copy without relying on the CDN honouring Cache-Control.
-        val url = URL("$baseUrl/latest.json?t=${System.currentTimeMillis()}")
+        val url = URL("$baseUrl/latest.json")
         val connection = (url.openConnection() as HttpURLConnection).apply {
             connectTimeout = CONNECT_TIMEOUT_MS
             readTimeout = READ_TIMEOUT_MS
@@ -62,6 +69,7 @@ object UpdateChecker {
             apkName = apkName,
             apkUrl = "$baseUrl/$apkName",
             sha256 = json.optString("sha256").takeIf { it.isNotEmpty() }?.lowercase(),
+            publishedAt = json.optString("publishedAt").takeIf { it.isNotEmpty() },
         )
     }
 
