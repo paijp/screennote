@@ -109,6 +109,9 @@ class BrowserActivity : AppCompatActivity() {
         Navigation(binding.webView) { url -> loadUrl(url) }
     }
 
+    /** The address the autofill session was last ended for; see [commitAutofill]. */
+    private var lastAutofillCommitUrl: String? = null
+
     private val probeHandler = Handler(Looper.getMainLooper())
     private var probing = false
     private val probeTick = object : Runnable {
@@ -213,6 +216,16 @@ class BrowserActivity : AppCompatActivity() {
         super.onResume()
         logUiMode("resume")
         applyPalette()
+        runCatching {
+            getSystemService(AutofillManager::class.java)?.registerCallback(autofillCallback)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        runCatching {
+            getSystemService(AutofillManager::class.java)?.unregisterCallback(autofillCallback)
+        }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -796,13 +809,47 @@ class BrowserActivity : AppCompatActivity() {
      * "save password?" prompt appear for WebView content — the framework has no other way to
      * know a form was submitted inside a WebView.
      */
-    private fun commitAutofill(reason: String) {
+    private fun commitAutofill(reason: String, url: String) {
+        // doUpdateVisitedHistory fires continuously on a site that navigates with pushState —
+        // measured at fifteen times in three seconds on GitHub. Committing that often ends the
+        // autofill session while the user is still typing into it, which is worse than never
+        // committing at all, so the same address only counts once.
+        if (reason == "history" && url == lastAutofillCommitUrl) return
+        lastAutofillCommitUrl = url
         runCatching {
             getSystemService(AutofillManager::class.java)?.let {
                 it.commit()
                 DebugLog.log("autofill", "commit $reason enabled=${it.isEnabled}")
             }
         }.onFailure { DebugLog.log("autofill", "commit $reason failed: $it") }
+    }
+
+    /**
+     * What the autofill service actually does, as the framework reports it.
+     *
+     * Without this there is no way to tell apart the two things that look identical from the
+     * outside: a service that was asked and had nothing to offer, and a WebView that never
+     * started a session for it to be asked about. The first is the service's business; the
+     * second is ours.
+     */
+    private val autofillCallback = object : AutofillManager.AutofillCallback() {
+        override fun onAutofillEvent(view: View, event: Int) = report(view, -1, event)
+
+        override fun onAutofillEvent(view: View, virtualId: Int, event: Int) =
+            report(view, virtualId, event)
+
+        private fun report(view: View, virtualId: Int, event: Int) {
+            val name = when (event) {
+                AutofillManager.AutofillCallback.EVENT_INPUT_SHOWN -> "shown"
+                AutofillManager.AutofillCallback.EVENT_INPUT_UNAVAILABLE -> "unavailable"
+                AutofillManager.AutofillCallback.EVENT_INPUT_HIDDEN -> "hidden"
+                else -> "event$event"
+            }
+            DebugLog.log(
+                "autofill",
+                "$name view=${view.javaClass.simpleName} virtual=$virtualId",
+            )
+        }
     }
 
     /**
@@ -822,6 +869,7 @@ class BrowserActivity : AppCompatActivity() {
         DebugLog.log(
             "autofill",
             "supported=${manager.isAutofillSupported} enabled=${manager.isEnabled}" +
+                " webview=${binding.webView.importantForAutofill}" +
                 if (!manager.isEnabled) " (no autofill service selected in system settings)" else "",
         )
     }
@@ -848,7 +896,7 @@ class BrowserActivity : AppCompatActivity() {
         }
 
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
-            commitAutofill("page")
+            commitAutofill("page", url)
             mainFrameUrl = url
             DebugLog.log("nav", "started $url")
             clearLoadError()
@@ -862,7 +910,7 @@ class BrowserActivity : AppCompatActivity() {
          * simply never appears on those sites.
          */
         override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
-            commitAutofill("history")
+            commitAutofill("history", url)
         }
 
         override fun onPageFinished(view: WebView, url: String) {
