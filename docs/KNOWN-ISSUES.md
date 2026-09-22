@@ -87,6 +87,18 @@ project), writing an engine.
 - Whether software rendering's scrolling is acceptable in daily use. This is the decision that
   governs whether options 1 or 3 are worth pursuing at all.
 
+## Keyboard shortcuts do not reach the app while a page's text field has focus
+
+Ctrl+L and the rest work everywhere except inside a text input on the page, where nothing happens.
+
+Key events reach the input method before the application. A physical-keyboard IME — which is what
+this device has — is free to consume them, and does, so `dispatchKeyEvent` is never called. That
+method runs ahead of the view hierarchy, not ahead of the IME, and there is no ordering an app can
+ask for that changes this.
+
+Left as it is. Tapping outside the field first restores the shortcuts, and the alternative would be
+fighting the platform for a case with an easy workaround.
+
 ## Resolved
 
 - **TLS failure on `akizukidenshi.com`** (`SSL_UNTRUSTED`). The chain ends at GlobalSign Root R46

@@ -459,6 +459,24 @@ WebView の URL しか返さないので、**エージェントからは「ペ�
    `script_timeout` では原因が分からない。console に `Blocked script execution` が
    出ているので、それを見て `javascript_disabled` を返せる
 
+### autofill は、こちらが壊さなければ動く
+
+実測で確定した。**`AutofillManager.commit()` を呼びすぎると、fill も save も死ぬ。**
+
+`doUpdateVisitedHistory` は pushState のサイトで連続発火し、GitHub では **3 秒に 15 回**。
+commit は「フォームを完了した」＝**セッションを終了する**呼び出しなので、これを連打すると
+**候補が出た直後に破棄される。** 外から見ると「autofill が効かない」としか見えない。
+
+同じ URL では 1 回だけにしたところ、`AutofillManager.AutofillCallback` が
+`shown view=WebView virtual=65536` を返すようになった。
+
+**切り分けには `AutofillCallback` を使う。** 「サービスが断った（`unavailable`）」と
+「セッションが始まっていない（無言）」は、それ無しでは外から区別できない。
+
+なお大前提として、**端末の自動入力サービスが「なし」だと何も起きない。** 既定でそうなっている
+端末は多く、症状はアプリのバグと見分けがつかない。起動時とハンドオーバ時に `enabled` を
+ログに出しているのはこのため。
+
 ### デスクトップ表示の効き方は一定でない
 
 秋月ではビューポートが 1200x1534 になったが、DigiKey では 411x526 のままだった（サイト側の
