@@ -83,10 +83,17 @@ app-private storage, so it does not fit the user's actual workflow.
 
 ## Passwords
 
-**Delegated to the system autofill service.** `importantForAutofill = YES` on the WebView, plus
-`AutofillManager.commit()` on navigation — without that call the "save password?" prompt never
-fires for WebView content. Screennote has no vault, no encryption, no key management, and never
-reads a password field.
+**Delegated to the system autofill service.** `importantForAutofill = YES` on the WebView, and
+nothing else. Screennote has no vault, no encryption, no key management, and never reads a
+password field.
+
+The app deliberately does *not* call `AutofillManager.commit()`. It used to, on the belief that
+the framework has no other way to know a form inside a WebView was submitted — that belief was
+wrong, and the call did active harm. Modern WebView drives the autofill session itself
+(`notifyViewEntered`, `notifyValueChanged`, `commit`), and a commit from outside it leaves the
+two disagreeing about whether a session is open: measured on GitHub's login page, the first
+visit filled correctly and saved, and every later visit produced no autofill event at all — not
+"unavailable", silence, meaning no session was ever started. Removing the call restored it.
 
 This was chosen over building a password manager in the app. A vault would have meant: Keystore-
 backed AES-GCM with a biometric gate, a passphrase-derived export path (Keystore keys die with the
