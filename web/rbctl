@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * The same commands as the MCP connector, for a Claude that has a shell here instead of a
  * connector. It talks to the relay's database directly through relay.php and agent.php, so it
- * must run as a user that can read RELAY_DIR (the web server's user, or root).
+ * must run as root or as the owner of RELAY_DIR; started as root, it switches to that owner.
  *
  * The agent token is taken from the environment, never from the command line, where every
  * other user of the host could read it in the process list.
@@ -36,6 +36,43 @@ if (is_file(__DIR__ . '/config.php')) {
 }
 defined('RELAY_DIR') || define('RELAY_DIR', getenv('RELAY_DIR') ?: __DIR__ . '/var');
 defined('RELAY_WAIT_SECONDS') || define('RELAY_WAIT_SECONDS', (int) (getenv('RELAY_WAIT_SECONDS') ?: 40));
+
+/**
+ * Run as the owner of RELAY_DIR, not as root.
+ *
+ * SQLite in WAL mode creates its -wal and -shm files with the opener's ownership. Root
+ * creating them would leave the web server unable to write the database, and the relay would
+ * stop for everyone. So when started as root, re-run under the directory's owner. The token
+ * travels in the environment as before, never in argv.
+ */
+function rbctl_drop_root(array $argv): void
+{
+    if (trim((string) shell_exec('id -u')) !== '0' || getenv('RBCTL_DROPPED') === '1') {
+        return;
+    }
+    $uid = @fileowner(RELAY_DIR);
+    if ($uid === false || $uid === 0) {
+        return; // nothing to drop to (a scratch install owned by root, e.g. selftest)
+    }
+    $user = null;
+    foreach (file('/etc/passwd', FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+        $f = explode(':', $line);
+        if (isset($f[2]) && (int) $f[2] === $uid) {
+            $user = $f[0];
+            break;
+        }
+    }
+    if ($user === null) {
+        fwrite(STDERR, "rbctl: cannot find the user owning " . RELAY_DIR . "\n");
+        exit(1);
+    }
+    $env = getenv() + ['RBCTL_DROPPED' => '1'];
+    $env['RBCTL_DROPPED'] = '1';
+    $cmd = array_merge(['runuser', '-u', $user, '--', PHP_BINARY, $argv[0]], array_slice($argv, 1));
+    $proc = proc_open($cmd, [0 => STDIN, 1 => STDOUT, 2 => STDERR], $pipes, null, $env);
+    exit($proc === false ? 1 : proc_close($proc));
+}
+rbctl_drop_root($argv);
 
 require __DIR__ . '/relay.php';
 require __DIR__ . '/agent.php';
