@@ -29,7 +29,7 @@ data class Pairing(
 data class Command(val id: Int, val requestJson: String, val mac: String)
 
 /**
- * The phone's side of the relay protocol. See `server/browser.php`.
+ * The phone's side of the relay protocol. See `web/browser.php`.
  *
  * One URL and one POST per operation, with the operation named in the body, so nothing here
  * depends on how the server maps paths.

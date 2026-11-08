@@ -23,7 +23,7 @@ kept current on a device without a store. **The capture and note features are no
 | PDF | Links ending in `.pdf`, `application/pdf` downloads, and `ACTION_VIEW` intents from other apps open in the built-in viewer |
 | PDF viewer | Continuous vertical scroll, pinch zoom with diagonal panning, lazy page rendering with an LRU cache, page indicator |
 | Autofill | `importantForAutofill=YES` on the WebView and nothing else; WebView runs the autofill session itself (see DESIGN.md for why the app must not call `commit()`) |
-| Agent control | Hands the open page to Claude through a relay the user sets (https only). The phone makes the 32-character agent token and runs only commands signed with it; see [docs/AGENT-CONTROL.md](docs/AGENT-CONTROL.md) and [server/](server/README.md) (MCP connector, or `rbctl` from a shell) |
+| Agent control | Hands the open page to Claude through a relay the user sets (https only). The phone makes the 32-character agent token and runs only commands signed with it; see [docs/AGENT-CONTROL.md](docs/AGENT-CONTROL.md) and [web/](web/README.md) (MCP connector, or `rbctl` from a shell) |
 | Updates | On launch (silently) and from the menu, reads `release/latest.json` on the default branch and offers to download and install a newer APK, verifying its SHA-256 |
 | Diagnostics | `DebugLog` ring buffer, readable and copyable from the overflow menu, mirrored to logcat |
 

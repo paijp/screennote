@@ -25,7 +25,7 @@
     <string name="relay_url_needed">先に中継サーバーを設定してください。</string>
     <string name="relay_pair_failed">中継サーバーに接続できませんでした: %1$s</string>
     <string name="agent_token_title">Claude に渡す内容</string>
-    <string name="agent_token_paste">Screennote 中継（%1$s）\nエージェントトークン: %2$s\n\nこのブラウザを操作して、次のことをしてください：</string>
+    <string name="agent_token_paste">Screennote 中継（%1$s）\nエージェントトークン: %2$s\n使い方: https://github.com/paijp/screennote/tree/main/web\n\nこのブラウザを操作して、次のことをしてください：</string>
     <string name="agent_token_copy">コピー</string>
     <string name="agent_token_copied">クリップボードにコピーしました</string>
     <string name="agent_session_expired">中継サーバーがこのブラウザを認識しなくなりました。エージェント操作を入れ直すと新しいトークンが出ます。</string>

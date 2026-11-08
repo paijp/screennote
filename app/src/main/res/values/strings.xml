@@ -28,7 +28,7 @@
     <string name="relay_url_needed">Set the relay server first.</string>
     <string name="relay_pair_failed">Could not reach the relay: %1$s</string>
     <string name="agent_token_title">Give this to Claude</string>
-    <string name="agent_token_paste">Screennote relay (%1$s)\nagent token: %2$s\n\nUse this browser to do the following:</string>
+    <string name="agent_token_paste">Screennote relay (%1$s)\nagent token: %2$s\nhow to use: https://github.com/paijp/screennote/tree/main/web\n\nUse this browser to do the following:</string>
     <string name="agent_token_copy">Copy</string>
     <string name="agent_token_copied">Copied to clipboard</string>
     <string name="agent_session_expired">The relay no longer recognises this browser. Turn agent control on again for a new token.</string>

@@ -13,7 +13,7 @@ import javax.crypto.spec.SecretKeySpec
  * So a relay that is not the one the user meant (a mistyped address, a domain that changed
  * hands) can watch a session exist but cannot get the phone to do anything.
  *
- * Must match `relay_session_key()` and `relay_sign()` in server/relay.php byte for byte.
+ * Must match `relay_session_key()` and `relay_sign()` in web/relay.php byte for byte.
  */
 object AgentToken {
 
