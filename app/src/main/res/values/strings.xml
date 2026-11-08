@@ -22,12 +22,13 @@
     <string name="action_agent_control_off">Agent control is off.</string>
     <string name="agent_control_unsupported">This device does not support Picture in Picture.</string>
     <string name="action_relay_url">Relay server…</string>
-    <string name="relay_url_message">Base URL of the relay, without the endpoint. Screennote adds /browser itself.</string>
+    <string name="relay_url_message">Base URL of the relay, without the endpoint (Screennote adds /browser). Whoever runs this server can drive this browser while agent control is on, including sites you are signed in to — set only a server you run yourself.</string>
     <string name="relay_url_hint">https://example.com/rbmcp</string>
+    <string name="relay_url_https_only">The relay must use https://.</string>
     <string name="relay_url_needed">Set the relay server first.</string>
     <string name="relay_pair_failed">Could not reach the relay: %1$s</string>
     <string name="agent_token_title">Give this to Claude</string>
-    <string name="agent_token_paste">remotebrowser connector (%1$s)\nagent token: %2$s\n\nUse this browser to do the following:</string>
+    <string name="agent_token_paste">Screennote relay (%1$s)\nagent token: %2$s\n\nUse this browser to do the following:</string>
     <string name="agent_token_copy">Copy</string>
     <string name="agent_token_copied">Copied to clipboard</string>
     <string name="agent_session_expired">The relay no longer recognises this browser. Turn agent control on again for a new token.</string>

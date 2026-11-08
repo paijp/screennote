@@ -8,9 +8,10 @@ declare(strict_types=1);
  * rules in whatever web server this ends up behind; routing by field means the deployment is
  * a single alias and nothing else.
  *
- *   {"op":"pair",   "device_id":"..."}         -> {browser_token, agent_token, session_id}
+ *   {"op":"pair",   "device_id":"...", "session_key":"<sha256 hex>"}
+ *                                              -> {browser_token, session_id}
  *   {"op":"poll",   "browser_token":"...", "state":{...}}
- *                                              -> {command:{id,request}|null}
+ *                                              -> {command:{id,request_json,mac}|null}
  *   {"op":"result", "browser_token":"...", "command_id":N, "response":{...}}
  *   {"op":"bye",    "browser_token":"..."}
  *
@@ -65,7 +66,19 @@ switch ((string) ($in['op'] ?? '')) {
             relay_send(['error' => 'rate_limited'], 429);
         }
         relay_note('pair');
-        $session = relay_open_session(isset($in['device_id']) ? (string) $in['device_id'] : null);
+        // The phone made the agent token and sends only its hash. An app too old to do that
+        // would expect a token back that no longer exists, so it is told plainly instead.
+        $sessionKey = strtolower((string) ($in['session_key'] ?? ''));
+        if (!preg_match('/^[0-9a-f]{64}$/', $sessionKey)) {
+            relay_send([
+                'error' => 'session_key_required',
+                'message' => 'This relay needs Screennote 0.1.20 or later.',
+            ], 400);
+        }
+        $session = relay_open_session(
+            isset($in['device_id']) ? (string) $in['device_id'] : null,
+            $sessionKey,
+        );
         relay_send($session + [
             'connected_seconds' => RELAY_CONNECTED_SECONDS,
             'valid_seconds' => RELAY_VALID_SECONDS,
@@ -90,9 +103,12 @@ switch ((string) ($in['op'] ?? '')) {
 
         $command = relay_take_next((int) $session['id']);
         relay_send([
+            // Sent as the exact text that was signed. The phone checks the signature against
+            // these bytes and only then parses them.
             'command' => $command === null ? null : [
                 'id' => (int) $command['id'],
-                'request' => json_decode((string) $command['request'], true),
+                'request_json' => (string) $command['request'],
+                'mac' => (string) ($command['mac'] ?? ''),
             ],
         ]);
 

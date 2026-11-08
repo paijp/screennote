@@ -436,13 +436,13 @@ class BrowserActivity : AppCompatActivity() {
     /**
      * What the user hands to the conversation.
      *
-     * The connector's URL is included because a name can be mistyped or duplicated and the
-     * model has no way to tell which server was meant; the URL it can check against the list
-     * it already has. The text ends waiting for an instruction so the user can simply carry
-     * on typing after pasting it.
+     * The relay's address is included because it is what the model checks the token against:
+     * a connector it already has, or the host it has a shell on. It is also, every time, the
+     * user's chance to see which server this browser has just been handed to. The text ends
+     * waiting for an instruction so the user can simply carry on typing after pasting it.
      */
     private fun showAgentTokenDialog(session: AgentSession) {
-        val text = getString(R.string.agent_token_paste, session.mcpEndpoint, session.agentToken)
+        val text = getString(R.string.agent_token_paste, session.relayBase, session.agentToken)
         AlertDialog.Builder(this)
             .setTitle(R.string.agent_token_title)
             .setMessage(text)
@@ -466,7 +466,15 @@ class BrowserActivity : AppCompatActivity() {
             .setMessage(R.string.relay_url_message)
             .setView(input)
             .setPositiveButton(R.string.save) { _, _ ->
-                prefs.relayUrl = input.text.toString().trim().ifEmpty { null }
+                val url = input.text.toString().trim().ifEmpty { null }
+                // https only: the relay carries every page the agent reads, and a plain-HTTP
+                // hop would hand it to anyone on the path. Commands are signed either way, but
+                // what the pages say is not.
+                if (url != null && !url.startsWith("https://", ignoreCase = true)) {
+                    Toast.makeText(this, R.string.relay_url_https_only, Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                prefs.relayUrl = url
                 DebugLog.log("agent", "relay=${prefs.relayUrl}")
             }
             .setNegativeButton(R.string.cancel, null)

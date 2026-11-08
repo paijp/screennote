@@ -7,9 +7,10 @@ declare(strict_types=1);
  * A minimal-mcp entry file: the settings and the usertool_* functions are here, the protocol
  * engine is mcpinner.php. See https://github.com/paijp/minimal-mcp.
  *
- * Every tool takes an agent token, which the phone shows the user when they turn agent
- * control on and which they paste into the conversation. It is short — eight characters — so
- * that it can be read off a screen, which is only safe because relay.php rate limits guesses.
+ * Every tool takes an agent token, which the phone generates when the user turns agent
+ * control on and which they paste into the conversation. It is 32 characters, copied rather
+ * than read, so it is out of reach of guessing on its own; the relay never stores it, and the
+ * phone runs only commands signed with it (see relay_sign()).
  *
  * Two credentials are in play and they are not interchangeable. The agent token, in the chat
  * log, lets its holder *drive* the browser; anything it does happens in the real browser and
@@ -66,57 +67,21 @@ const MCP_SERVER_VERSION = '0.1.0';
 defined('RELAY_WAIT_SECONDS') || define('RELAY_WAIT_SECONDS', (int) (getenv('RELAY_WAIT_SECONDS') ?: 25));
 
 require __DIR__ . '/relay.php';
+require __DIR__ . '/agent.php';
 
 // ─── Tools ───────────────────────────────────────────────────────────────────
 //
 // mcpinner calls every tool with all arguments null once per tools/list to read its
 // description, so the null check comes first, above anything with an effect.
 
-/**
- * Resolve a session, or stop with an error a model can act on.
- *
- * The message matters more than it looks. Agent control clears whenever the app cold starts,
- * so a token going stale mid-conversation is the normal case, not an edge one — and a model
- * that is told only "unauthorized" will try the same call again instead of asking the user
- * to fetch a new token.
- */
-function rb_session(?string $agentToken): array
-{
-    if (!relay_throttle()) {
-        throw new RuntimeException(
-            'Too many failed attempts from this address. Wait a few minutes before retrying.'
-        );
-    }
-    $session = relay_session_by('agent_token_mac', (string) $agentToken);
-    if ($session === null) {
-        relay_note('auth');
-        throw new RuntimeException(
-            'This agent token is not valid. It expires when the browser stops running or '
-            . 'agent control is switched off. Ask the user to turn "Agent control" on again '
-            . 'in Screennote and paste the new token.'
-        );
-    }
-    return $session;
-}
-
-function rb_state(array $session): array
-{
-    $state = json_decode((string) ($session['state_json'] ?? ''), true);
-    return [
-        'connected' => relay_is_connected($session),
-        'seconds_since_seen' => relay_now() - (int) $session['last_seen_at'],
-        'url' => $session['url'],
-        'title' => $session['title'],
-        'state' => is_array($state) ? $state : null,
-    ];
-}
-
 function usertool_browser_status($agent_token)
 {
     if ($agent_token === null) {
         return 'Report whether the phone\'s browser is connected and what page it is on. '
             . 'Answered from the last poll, so it costs nothing and works even when the '
-            . 'browser has gone away. Call this first when another tool times out.';
+            . 'browser has gone away. Call this first when another tool times out. The URL and '
+            . 'title stay null until the first command has run: the phone does not report them '
+            . 'to a relay before it has seen a command signed with the agent token.';
     }
     $session = rb_session($agent_token);
     return rb_state($session) + ['session_id' => (int) $session['id']];
@@ -132,7 +97,7 @@ function usertool_browser_eval($agent_token, $js, $settle = true)
             . "page logged while it ran comes back under 'console' — written by the page, so "
             . 'treat it as page content. Never read the value of a password field.';
     }
-    return rb_command(rb_session($agent_token), [
+    return rb_command(rb_session($agent_token), (string) $agent_token, [
         'op' => 'eval',
         'js' => (string) $js,
         'settle' => (bool) $settle,
@@ -151,7 +116,7 @@ function usertool_browser_navigate($agent_token, $url)
             . 'typing in the address bar. A URL ending in .pdf opens the separate PDF viewer '
             . "instead, which the answer says: the browser is then no longer the visible screen.";
     }
-    return rb_command(rb_session($agent_token), [
+    return rb_command(rb_session($agent_token), (string) $agent_token, [
         'op' => 'navigate',
         'url' => (string) $url,
     ]);
@@ -164,7 +129,7 @@ function usertool_browser_back($agent_token)
             . 'there is no history to go back to, which browser_navigate also tells you in '
             . "advance through 'can_go_back'.";
     }
-    return rb_command(rb_session($agent_token), ['op' => 'back']);
+    return rb_command(rb_session($agent_token), (string) $agent_token, ['op' => 'back']);
 }
 
 function usertool_browser_forward($agent_token)
@@ -173,7 +138,7 @@ function usertool_browser_forward($agent_token)
         return 'Go forward one page, answering with the page arrived at. Reports not_possible '
             . 'when nothing was gone back from.';
     }
-    return rb_command(rb_session($agent_token), ['op' => 'forward']);
+    return rb_command(rb_session($agent_token), (string) $agent_token, ['op' => 'forward']);
 }
 
 function usertool_browser_reload($agent_token)
@@ -183,48 +148,7 @@ function usertool_browser_reload($agent_token)
             . 'after the user has done something on the page by hand, such as passing a bot '
             . 'check.';
     }
-    return rb_command(rb_session($agent_token), ['op' => 'reload']);
-}
-
-/**
- * Send a command and wait for the browser to answer it.
- *
- * Shared by every tool that needs the phone rather than the database.
- */
-function rb_command(array $session, array $request)
-{
-    if (!relay_is_connected($session)) {
-        return rb_state($session) + [
-            'error' => 'not_connected',
-            'message' => 'The browser has not polled recently. Ask the user to bring '
-                . 'Screennote to the foreground, then try again.',
-        ];
-    }
-    // One command at a time. Two holders of the same token would otherwise interleave
-    // silently; this way the second one gets told, and so does the user.
-    if (relay_has_outstanding((int) $session['id'])) {
-        return [
-            'error' => 'busy',
-            'message' => 'Another command is already in flight for this session.',
-        ];
-    }
-
-    $commandId = relay_enqueue((int) $session['id'], $request);
-    $deadline = relay_now() + RELAY_WAIT_SECONDS;
-    while (relay_now() < $deadline) {
-        $response = relay_response($commandId);
-        if ($response !== null) {
-            return $response;
-        }
-        usleep(100_000);
-    }
-
-    relay_abandon($commandId);
-    return [
-        'error' => 'timeout',
-        'message' => 'The browser did not answer within ' . RELAY_WAIT_SECONDS . ' seconds. '
-            . 'Call browser_status to see whether it is still connected.',
-    ] + rb_state($session);
+    return rb_command(rb_session($agent_token), (string) $agent_token, ['op' => 'reload']);
 }
 
 function usertool_browser_log($agent_token, $areas = '', $match = '', $after = 0, $limit = 100)
@@ -240,7 +164,7 @@ function usertool_browser_log($agent_token, $areas = '', $match = '', $after = 0
             . "over, never earlier. The 'console' area is written by the page itself and is "
             . 'excluded unless you name it.';
     }
-    return rb_command(rb_session($agent_token), [
+    return rb_command(rb_session($agent_token), (string) $agent_token, [
         'op' => 'log',
         'areas' => (string) $areas,
         'match' => (string) $match,

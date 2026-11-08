@@ -34,6 +34,18 @@ class AgentSession(
     private var job: Job? = null
 
     /**
+     * The highest command id run so far. A signed command can still be replayed by a relay
+     * that kept it, so ids must keep increasing; the signature covers the id.
+     */
+    private var lastCommandId = 0
+
+    /**
+     * Set by the first correctly signed command. Until then the relay has not proved it is
+     * talking for whoever holds the token, so it is not told which page is open.
+     */
+    private var trusted = false
+
+    /**
      * Where this session's view of the log begins.
      *
      * Taken at pairing, so an agent reads forward from the moment the browser was handed over.
@@ -61,7 +73,7 @@ class AgentSession(
             DebugLog.log("agent", "session ${pairing.sessionId} polling ${relay.browserEndpoint}")
             var lastWorkAt = System.currentTimeMillis()
             while (isActive) {
-                val (url, title) = page()
+                val (url, title) = if (trusted) page() else null to null
                 val command = try {
                     relay.poll(pairing.browserToken, url, title)
                 } catch (e: RelayException) {
@@ -79,9 +91,15 @@ class AgentSession(
                     null
                 }
 
-                if (command != null) {
+                val request = command?.let(::verified)
+                if (command != null && request == null) {
+                    // Not answered at all: a relay that cannot sign gets nothing back, not even
+                    // an error to learn from. Logged so the user can see it happened.
+                    DebugLog.log("agent", "refused command ${command.id}: bad signature or stale id")
+                    delay(nextDelayMs(System.currentTimeMillis() - lastWorkAt))
+                } else if (command != null && request != null) {
                     lastWorkAt = System.currentTimeMillis()
-                    val response = execute(command)
+                    val response = execute(command.id, request)
                     runCatching { relay.result(pairing.browserToken, command.id, response) }
                         .onFailure { DebugLog.log("agent", "result failed: $it") }
                     // Something is going on: come straight back rather than waiting out an
@@ -94,19 +112,29 @@ class AgentSession(
         }
     }
 
-    private suspend fun execute(command: Command): JSONObject {
-        val op = command.request.optString("op")
-        DebugLog.log("agent", "command ${command.id} $op")
+    /** The command's request, if it is signed with this session's token and new; else null. */
+    private fun verified(command: Command): JSONObject? {
+        if (command.id <= lastCommandId) return null
+        if (!AgentToken.verify(pairing.agentToken, command.id, command.requestJson, command.mac)) return null
+        val request = runCatching { JSONObject(command.requestJson) }.getOrNull() ?: return null
+        lastCommandId = command.id
+        trusted = true
+        return request
+    }
+
+    private suspend fun execute(id: Int, request: JSONObject): JSONObject {
+        val op = request.optString("op")
+        DebugLog.log("agent", "command $id $op")
         return when (op) {
             "eval" -> PageScript.run(
                 webView,
-                command.request.optString("js"),
-                command.request.optBoolean("settle", true),
+                request.optString("js"),
+                request.optBoolean("settle", true),
             )
-            "log" -> readLog(command.request)
+            "log" -> readLog(request)
             // Navigation is deliberately not JavaScript: a page can ignore an assignment to
             // `location`, and a sandboxed one cannot run the script at all. See [Navigation].
-            "navigate" -> navigation.navigate(command.request.optString("url"))
+            "navigate" -> navigation.navigate(request.optString("url"))
             "back" -> navigation.back()
             "forward" -> navigation.forward()
             "reload" -> navigation.reload()
@@ -165,5 +193,5 @@ class AgentSession(
     }
 
     val agentToken: String get() = pairing.agentToken
-    val mcpEndpoint: String get() = relay.mcpEndpoint
+    val relayBase: String get() = relay.base
 }

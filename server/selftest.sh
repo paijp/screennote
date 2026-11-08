@@ -10,9 +10,8 @@
 # skipped and only the device protocol is checked.
 #
 # Half of what is checked here is the attacks, not the happy path: polling without the
-# browser token, driving with a stale agent token, and guessing agent tokens until the rate
-# limiter bites. An eight-character token is only out of reach while that limiter works, so a
-# test that never tries to guess one would be testing the wrong thing.
+# browser token, driving with a stale agent token, guessing until the rate limiter bites, and
+# checking that every command reaches the phone signed with a token the relay never stored.
 
 set -eu
 
@@ -69,6 +68,13 @@ field() { # field <json> <key> -- first string value for that key
     printf '%s' "$1" | sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p"
 }
 
+
+# The phone's side of the crypto, done with the PHP CLI so the test does not depend on the
+# relay's own functions to check the relay.
+newtoken() { php -r '$a="0123456789ABCDEFGHJKMNPQRSTVWXYZ";$t="";for($i=0;$i<32;$i++)$t.=$a[random_int(0,31)];echo $t;'; }
+sesskey() { php -r 'echo hash("sha256","screennote-session:".$argv[1]);' "$1"; }
+pairbody() { printf '{"op":"pair","device_id":"selftest","session_key":"%s"}' "$(sesskey "$1")"; }
+
 # Short timings so the connected/expired paths can be reached without a long wait.
 export RELAY_DIR="$WORK/var"
 export RELAY_CONNECTED_SECONDS=3
@@ -100,19 +106,16 @@ done
 
 echo "== device protocol =="
 
-PAIR=$(post /browser.php '{"op":"pair","device_id":"selftest"}')
+has "pairing without a session key is refused with an upgrade hint" \
+    "$(post /browser.php '{"op":"pair","device_id":"selftest"}')" 'session_key_required'
+
+AT=$(newtoken)
+PAIR=$(post /browser.php "$(pairbody "$AT")")
 BT=$(field "$PAIR" browser_token)
-AT=$(field "$PAIR" agent_token)
 
 [ -n "$BT" ] && ok "pair returns a browser token" || no "pair returns a browser token" "$PAIR"
-case "$AT" in
-    ????????) ok "agent token is 8 characters" ;;
-    *) no "agent token is 8 characters" "got '$AT'" ;;
-esac
-case "$AT" in
-    *[ILOU]*) no "agent token avoids ambiguous letters" "got '$AT'" ;;
-    *) ok "agent token avoids ambiguous letters" ;;
-esac
+hasnt "pair does not hand out an agent token" "$PAIR" 'agent_token'
+hasnt "the relay never sees the agent token" "$(cat "$RELAY_DIR"/relay.sq3* 2>/dev/null | tr -d '\0')" "$AT"
 
 has "poll with the browser token is accepted" \
     "$(post /browser.php "{\"op\":\"poll\",\"browser_token\":\"$BT\",\"state\":{\"url\":\"https://example.com/\",\"title\":\"Example\"}}")" \
@@ -133,11 +136,9 @@ has "posting a result without the browser token is refused" \
 
 echo "== re-pairing retires the old session =="
 
-PAIR2=$(post /browser.php '{"op":"pair","device_id":"selftest"}')
+AT2=$(newtoken)
+PAIR2=$(post /browser.php "$(pairbody "$AT2")")
 BT2=$(field "$PAIR2" browser_token)
-AT2=$(field "$PAIR2" agent_token)
-[ "$AT" != "$AT2" ] && ok "a new pairing mints a new agent token" \
-    || no "a new pairing mints a new agent token" "same token twice"
 has "the previous browser token stops working" \
     "$(post /browser.php "{\"op\":\"poll\",\"browser_token\":\"$BT\"}")" 'unknown_token'
 
@@ -182,6 +183,26 @@ has "status reports the page the browser last polled with" \
 
 has "a wrong agent token says how to recover" \
     "$(call browser_status '{"agent_token":"AAAAAAAA"}')" 'Agent control'
+
+echo "== commands arrive signed =="
+
+# Queue one command and read it off the device endpoint directly, to see what the phone sees.
+call browser_eval "{\"agent_token\":\"$AT\",\"js\":\"signed()\"}" >/dev/null 2>&1 &
+CALL=$!
+sleep 0.5
+RAW=$(post /browser.php "{\"op\":\"poll\",\"browser_token\":\"$BT\"}")
+wait "$CALL"
+php -r '
+$r = json_decode($argv[1], true)["command"] ?? null;
+if (!$r) { echo "FAIL no command\n"; exit; }
+$want = hash_hmac("sha256", $r["id"] . "\n" . $r["request_json"], $argv[2]);
+echo hash_equals($want, $r["mac"]) ? "OK\n" : "FAIL bad mac\n";
+echo str_contains($r["request_json"], "signed()") ? "OK\n" : "FAIL body\n";
+$bad = hash_hmac("sha256", $r["id"] . "\n" . $r["request_json"], "WRONGTOKEN");
+echo hash_equals($bad, $r["mac"]) ? "FAIL other key verifies\n" : "OK\n";
+' "$RAW" "$AT" >"$WORK/sig"
+grep -q '^FAIL' "$WORK/sig" && no "command carries a valid signature" "$(cat "$WORK/sig") $RAW" \
+    || ok "command carries a valid signature, over the exact text, and only with this token"
 
 # A fake device: polls, answers any eval with a canned value, posts the result back.
 cat >"$WORK/device.sh" <<DEVICE
@@ -247,15 +268,26 @@ sleep "$((RELAY_VALID_SECONDS - RELAY_CONNECTED_SECONDS + 1))"
 has "the agent token expires with the browser that issued it" \
     "$(call browser_status "{\"agent_token\":\"$AT\"}")" 'Agent control'
 
+echo "== rbctl =="
+
+has "rbctl explains itself" "$("$HERE/rbctl" --help)" 'RB_TOKEN'
+has "rbctl refuses without a token" "$("$HERE/rbctl" status 2>&1 || true)" 'set RB_TOKEN'
+AT4=$(newtoken)
+BT4=$(field "$(post /browser.php "$(pairbody "$AT4")")" browser_token)
+post /browser.php "{\"op\":\"poll\",\"browser_token\":\"$BT4\",\"state\":{\"url\":\"https://example.org/\"}}" >/dev/null
+has "rbctl status reads the session" "$(RB_TOKEN="$AT4" "$HERE/rbctl" status 2>&1)" 'https://example.org/'
+has "rbctl marks page output as data" "$(RB_TOKEN="$AT4" "$HERE/rbctl" status 2>&1)" 'not instructions'
+
+
 echo "== guessing the agent token =="
 
-# Eight characters is 40 bits, which is out of reach only while guesses are slow. What must
+# The token is long enough now that guessing is hopeless anyway; the limiter stays. What must
 # NOT happen is that the slowing-down locks out the person the token belongs to: a stale token
 # is the ordinary case here, because agent control clears on every cold start, and the request
 # that carries the replacement must still get through.
-PAIR3=$(post /browser.php '{"op":"pair","device_id":"selftest"}')
+AT3=$(newtoken)
+PAIR3=$(post /browser.php "$(pairbody "$AT3")")
 BT3=$(field "$PAIR3" browser_token)
-AT3=$(field "$PAIR3" agent_token)
 post /browser.php "{\"op\":\"poll\",\"browser_token\":\"$BT3\",\"state\":{\"url\":\"https://example.com/\"}}" >/dev/null
 
 i=0
@@ -276,7 +308,7 @@ has "sustained guessing is refused outright" \
 # And the refusal must not be a way to cut the user off: pairing is the phone's own request
 # and has nothing to do with someone else's guesses.
 has "pairing still works while a guesser is blocked" \
-    "$(post /browser.php '{"op":"pair","device_id":"selftest"}')" 'browser_token'
+    "$(post /browser.php "$(pairbody "$(newtoken)")")" 'browser_token'
 
 echo
 printf '%d passed, %d failed\n' "$pass" "$fail"

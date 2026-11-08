@@ -8,17 +8,25 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** A pairing: what the relay hands back when agent control is switched on. */
+/** A pairing: the relay's half and the phone's half of one agent-control activation. */
 data class Pairing(
-    /** Authenticates this device. Never shown, never leaves the app. */
+    /** Authenticates this device to the relay. Minted by the relay; never shown. */
     val browserToken: String,
-    /** Shown to the user to paste into the conversation. Eight characters. */
+    /**
+     * Made here and shown to the user to paste into the conversation. The relay has only its
+     * hash, and every command must be signed with it — see [AgentToken].
+     */
     val agentToken: String,
     val sessionId: Int,
 )
 
-/** One instruction from the relay, and the id the answer has to quote. */
-data class Command(val id: Int, val request: JSONObject)
+/**
+ * One instruction as the relay delivered it: not yet trusted.
+ *
+ * [requestJson] is kept as the exact text that was signed. It is parsed only after [mac] has
+ * been checked against it, so nothing in an unsigned command is ever acted on.
+ */
+data class Command(val id: Int, val requestJson: String, val mac: String)
 
 /**
  * The phone's side of the relay protocol. See `server/browser.php`.
@@ -26,20 +34,25 @@ data class Command(val id: Int, val request: JSONObject)
  * One URL and one POST per operation, with the operation named in the body, so nothing here
  * depends on how the server maps paths.
  *
- * [baseUrl] is the relay's prefix — `https://host/rbmcp` — from which both endpoints follow.
- * The MCP endpoint is derived only to show the user which connector the token belongs to;
- * this app never calls it.
+ * [baseUrl] is the relay's prefix — `https://host/rbmcp` — set by the user, one at a time.
+ * Only `/browser` is ever called from here.
  */
 class Relay(private val baseUrl: String) {
 
     val browserEndpoint: String get() = "${baseUrl.trimEnd('/')}/browser"
-    val mcpEndpoint: String get() = "${baseUrl.trimEnd('/')}/mcp"
+    val base: String get() = baseUrl.trimEnd('/')
 
     suspend fun pair(deviceId: String): Pairing {
-        val body = post(JSONObject().put("op", "pair").put("device_id", deviceId))
+        val agentToken = AgentToken.generate()
+        val body = post(
+            JSONObject()
+                .put("op", "pair")
+                .put("device_id", deviceId)
+                .put("session_key", AgentToken.sessionKey(agentToken))
+        )
         return Pairing(
             browserToken = body.getString("browser_token"),
-            agentToken = body.getString("agent_token"),
+            agentToken = agentToken,
             sessionId = body.optInt("session_id"),
         )
     }
@@ -50,6 +63,9 @@ class Relay(private val baseUrl: String) {
      * The state travels on every poll so the relay can answer `browser_status` out of its own
      * database. That makes the status tool free, and — more to the point — able to say
      * something useful at the moment the phone has stopped answering.
+     *
+     * The caller passes null for both until a correctly signed command has arrived, so a relay
+     * that turns out not to be the user's learns nothing about what they are browsing.
      */
     suspend fun poll(browserToken: String, url: String?, title: String?): Command? {
         val state = JSONObject()
@@ -62,7 +78,7 @@ class Relay(private val baseUrl: String) {
                 .put("state", state)
         )
         val command = body.optJSONObject("command") ?: return null
-        return Command(command.getInt("id"), command.getJSONObject("request"))
+        return Command(command.getInt("id"), command.optString("request_json"), command.optString("mac"))
     }
 
     suspend fun result(browserToken: String, commandId: Int, response: JSONObject) {

@@ -45,7 +45,9 @@ defined('RELAY_VALID_SECONDS') || define('RELAY_VALID_SECONDS', (int) (getenv('R
 /**
  * Slowing down token guessing.
  *
- * Eight characters is forty bits, which is out of reach only while guesses are slow. The
+ * The agent token is now 32 characters and the phone checks a signature made with it, so
+ * guessing no longer gets anywhere; this stays as defence in depth, and for relays that a
+ * future change might weaken. When the token was eight characters it was load-bearing. The
  * obvious way to make them slow — refuse after N failures — turns out to lock out the person
  * the token belongs to: agent control clears whenever the app cold starts, so being handed a
  * stale token is the ordinary case, and a few of those would wall off the very request that
@@ -76,9 +78,36 @@ defined('RELAY_PAIR_LIMIT') || define('RELAY_PAIR_LIMIT', (int) (getenv('RELAY_P
  */
 const RELAY_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-/** Characters per token. The agent token is read by a person; the browser token never is. */
-const RELAY_AGENT_TOKEN_LEN = 8;     // 40 bits — safe only because guessing is rate limited
+/** Characters in the browser token, which the relay mints and only the phone ever holds. */
 const RELAY_BROWSER_TOKEN_LEN = 32;  // 160 bits
+
+/**
+ * The agent token is not minted here at all.
+ *
+ * The phone generates it (32 characters, the same alphabet) and shows it to the user, and the
+ * relay only ever learns a hash of it: the session key. Commands are signed with the token
+ * itself, so a relay that is not the one the user meant — a mistyped address, a domain that
+ * changed hands — can see a session exist but cannot issue a single command the phone will run.
+ */
+const RELAY_SESSION_KEY_PREFIX = 'screennote-session:';
+
+/** The session key a token stands for. Both ends compute this; only the phone sends it. */
+function relay_session_key(string $agentToken): string
+{
+    return hash('sha256', RELAY_SESSION_KEY_PREFIX . strtoupper(trim($agentToken)));
+}
+
+/**
+ * The signature the phone checks before running a command.
+ *
+ * Over the exact JSON text the phone will receive, not over a re-encoding of it, so neither
+ * side has to agree on a canonical form. The id is included so a captured command cannot be
+ * replayed under a later id; the phone refuses ids that do not increase.
+ */
+function relay_sign(string $agentToken, int $commandId, string $requestJson): string
+{
+    return hash_hmac('sha256', $commandId . "\n" . $requestJson, strtoupper(trim($agentToken)));
+}
 
 // ─── Plumbing ────────────────────────────────────────────────────────────────
 
@@ -176,6 +205,13 @@ function relay_db(): PDO
     $db->exec('PRAGMA journal_mode = WAL');
     $db->exec('PRAGMA busy_timeout = 5000');
     $db->exec((string) file_get_contents(__DIR__ . '/schema.sql'));
+    // Databases created before commands were signed lack the column. CREATE TABLE IF NOT
+    // EXISTS leaves an existing table alone, so add it here; the error on a second run is the
+    // column already being there.
+    try {
+        $db->exec('ALTER TABLE commands ADD COLUMN mac TEXT');
+    } catch (PDOException) {
+    }
     return $db;
 }
 
@@ -253,7 +289,7 @@ function relay_is_connected(array $session): bool
  * token from a previous activation can never come back — and because the old sessions are
  * revoked in the same breath, at most one pairing is ever live.
  */
-function relay_open_session(?string $deviceId): array
+function relay_open_session(?string $deviceId, string $sessionKey): array
 {
     $db = relay_db();
     $now = relay_now();
@@ -262,13 +298,12 @@ function relay_open_session(?string $deviceId): array
         $db->prepare('UPDATE sessions SET revoked_at = ? WHERE revoked_at IS NULL')
             ->execute([$now]);
         $browserToken = relay_token(RELAY_BROWSER_TOKEN_LEN);
-        $agentToken = relay_token(RELAY_AGENT_TOKEN_LEN);
         $db->prepare(
             'INSERT INTO sessions (browser_token_mac, agent_token_mac, device_id,
                                    created_at, last_seen_at)
              VALUES (?, ?, ?, ?, ?)'
         )->execute([
-            relay_mac($browserToken), relay_mac($agentToken), $deviceId, $now, $now,
+            relay_mac($browserToken), relay_mac($sessionKey), $deviceId, $now, $now,
         ]);
         $id = (int) $db->lastInsertId();
         $db->commit();
@@ -276,7 +311,7 @@ function relay_open_session(?string $deviceId): array
         $db->rollBack();
         throw $e;
     }
-    return ['session_id' => $id, 'browser_token' => $browserToken, 'agent_token' => $agentToken];
+    return ['session_id' => $id, 'browser_token' => $browserToken];
 }
 
 function relay_revoke(int $sessionId): void
@@ -287,12 +322,29 @@ function relay_revoke(int $sessionId): void
 
 // ─── Commands ────────────────────────────────────────────────────────────────
 
-function relay_enqueue(int $sessionId, array $request): int
+/**
+ * Queue a command, signed with the agent token.
+ *
+ * The token is needed here and nowhere else on the server: it arrives with the caller's
+ * request, is used to sign, and is not stored.
+ */
+function relay_enqueue(int $sessionId, array $request, string $agentToken): int
 {
     $db = relay_db();
-    $db->prepare('INSERT INTO commands (session_id, created_at, request) VALUES (?, ?, ?)')
-        ->execute([$sessionId, relay_now(), json_encode($request, JSON_UNESCAPED_UNICODE)]);
-    return (int) $db->lastInsertId();
+    $json = json_encode($request, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $db->beginTransaction();
+    try {
+        $db->prepare('INSERT INTO commands (session_id, created_at, request) VALUES (?, ?, ?)')
+            ->execute([$sessionId, relay_now(), $json]);
+        $id = (int) $db->lastInsertId();
+        $db->prepare('UPDATE commands SET mac = ? WHERE id = ?')
+            ->execute([relay_sign($agentToken, $id, $json), $id]);
+        $db->commit();
+    } catch (Throwable $e) {
+        $db->rollBack();
+        throw $e;
+    }
+    return $id;
 }
 
 /** True when this session already has a command out that nobody has answered. */
